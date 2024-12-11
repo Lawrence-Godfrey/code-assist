@@ -53,6 +53,9 @@ class EmbeddingSimilaritySearch:
 
             if unit.get("methods"):
                 for method in unit["methods"]:
+                    method["filepath"] = unit["filepath"]
+                    method["class"] = unit["name"]
+                    method["type"] = "method"
                     normalised_units.append(method)
 
         return normalised_units
@@ -271,17 +274,20 @@ def compare(
     searcher = EmbeddingSimilaritySearch(code_units)
 
     # Generate query embedding
+    print(f"Query: {query}")
     embedder = CodeEmbedder()
     query_vector = embedder.generate_embedding(query)
 
     # Compare all code units
+    print("Generating similarity scores...")
     results = searcher.find_similar(query_vector)
 
     for result in results:
-        print(f"{result.code_unit['filepath']} - Similarity: {result.similarity_score}")
+        print(
+            f"{result.code_unit['filepath']}: {result.code_unit.get('class', '')}.{result.code_unit['name']} - Similarity: {result.similarity_score}"
+        )
 
     # Save results
-    print("Generating similarity scores...")
     with open(output_path, "w", encoding="utf-8") as f:
         json_results = []
         for result in results:
