@@ -83,8 +83,8 @@ class CodeEmbedder:
         for unit in code_units_with_embeddings:
             try:
                 source_code = unit.get("source_code", "")
-
-                embedding = self.generate_embedding(source_code)
+                formatted_string = f"type: {unit['type']}, filepath: {unit['filepath']}, source_code: {source_code}"
+                embedding = self.generate_embedding(formatted_string)
 
                 if embedding is not None:
                     unit["embedding"] = embedding.tolist()
@@ -92,7 +92,8 @@ class CodeEmbedder:
                 if unit.get("methods"):
                     for method in unit["methods"]:
                         method_source = method.get("source_code", "")
-                        method_embedding = self.generate_embedding(method_source)
+                        formatted_string = f"type: method, name: {method['name']}, class: {unit["name"]}, source_code: {method_source}"
+                        method_embedding = self.generate_embedding(formatted_string)
                         if method_embedding is not None:
                             method["embedding"] = method_embedding.tolist()
 
