@@ -7,6 +7,8 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 from typing import List, Dict, Optional
 
+from storage.code_store import CodebaseSnapshot
+
 
 class CodeEmbedder:
     def __init__(
@@ -66,41 +68,42 @@ class CodeEmbedder:
 
     def embed_code_units(
         self,
-        code_units: List[Dict],
+        codebase: CodebaseSnapshot,
     ) -> List[Dict]:
         """
         Generate embeddings for a list of code units.
 
         Args:
-            code_units (List[Dict]): List of code units to embed
+            codebase (CodebaseSnapshot): Codebase snapshot containing code units
 
         Returns:
             List of code units with added embeddings
         """
 
-        code_units_with_embeddings = code_units.copy()
+        for file in codebase:
+            for unit in file:
+                try:
+                    if unit.type == "method":
+                        formatted_string = (
+                            f"type: {unit.type}, "
+                            f"class: {unit.class_name}, "
+                            f"method: {unit.name}, "
+                            f"source_code: {unit.source_code}"
+                        )
+                    else:
+                        formatted_string = (
+                            f"type: {unit.type}, "
+                            f"filepath: {unit.filepath}, "
+                            f"source_code: {unit.source_code}"
+                        )
 
-        for unit in code_units_with_embeddings:
-            try:
-                source_code = unit.get("source_code", "")
-                formatted_string = f"type: {unit['type']}, filepath: {unit['filepath']}, source_code: {source_code}"
-                embedding = self.generate_embedding(formatted_string)
+                    embedding = self.generate_embedding(formatted_string)
 
-                if embedding is not None:
-                    unit["embedding"] = embedding.tolist()
+                    if embedding is not None:
+                        unit.embedding = embedding.tolist()
 
-                if unit.get("methods"):
-                    for method in unit["methods"]:
-                        method_source = method.get("source_code", "")
-                        formatted_string = f"type: method, name: {method['name']}, class: {unit["name"]}, source_code: {method_source}"
-                        method_embedding = self.generate_embedding(formatted_string)
-                        if method_embedding is not None:
-                            method["embedding"] = method_embedding.tolist()
-
-            except Exception as e:
-                print(f"Failed to embed unit {unit.get('name', 'Unknown')}: {e}")
-
-        return code_units_with_embeddings
+                except Exception as e:
+                    print(f"Failed to embed unit {unit.get('name', 'Unknown')}: {e}")
 
 
 def process_embeddings(

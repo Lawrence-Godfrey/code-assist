@@ -1,6 +1,7 @@
 import os
 import ast
 from os.path import expanduser
+from pathlib import Path
 
 import astor
 import json
@@ -11,6 +12,8 @@ from typing import List, Dict, Union, Optional
 import git
 import fire
 from git import Repo
+
+from storage.code_store import CodebaseSnapshot, Class, Method, Function, File
 
 
 class GitHubCodeExtractor:
@@ -128,7 +131,7 @@ class GitHubCodeExtractor:
         self.logger.info(f"Found {len(python_files)} Python files")
         return python_files
 
-    def extract_code_units(self, file_path: str) -> List[Dict[str, Union[str, Dict]]]:
+    def extract_code_units(self, file_path: str) -> File:
         """
         Extract methods, classes, and functions from a Python file.
 
@@ -136,62 +139,61 @@ class GitHubCodeExtractor:
             file_path (str): Path to a Python source file
 
         Returns:
-            List of dictionaries containing code units
+            A File object containing code units
         """
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 file_content = f.read()
 
             tree = ast.parse(file_content)
-            code_units = []
 
             # Get the file path relative to the repository root.
             file_path_relative = os.path.relpath(file_path, self.repo_path)
 
+            file = File(
+                name=os.path.basename(file_path),
+                filepath=Path(file_path_relative),
+                source_code=file_content,
+            )
+
             for node in ast.iter_child_nodes(tree):
                 # Extract classes
                 if isinstance(node, ast.ClassDef):
-                    code_units.append(
-                        {
-                            "type": "class",
-                            "name": node.name,
-                            "filepath": file_path_relative,
-                            "filename": os.path.basename(file_path),
-                            "source_code": astor.to_source(node),
-                            "docstring": ast.get_docstring(node) or "",
-                            "methods": [
-                                {
-                                    "name": method.name,
-                                    "source_code": astor.to_source(method),
-                                    "docstring": ast.get_docstring(method) or "",
-                                }
-                                for method in node.body
-                                if isinstance(method, ast.FunctionDef)
-                            ],
-                        }
+                    cls = Class(
+                        name=node.name,
+                        source_code=astor.to_source(node),
+                        docstring=ast.get_docstring(node) or "",
                     )
+                    for method in node.body:
+                        if isinstance(method, ast.FunctionDef):
+                            cls.add_method(
+                                Method(
+                                    name=method.name,
+                                    source_code=astor.to_source(method),
+                                    docstring=ast.get_docstring(method) or "",
+                                )
+                            )
+
+                    file.add_code_unit(cls)
 
                 # Extract top-level functions
                 elif isinstance(node, ast.FunctionDef):
-                    code_units.append(
-                        {
-                            "type": "function",
-                            "name": node.name,
-                            "filepath": file_path_relative,
-                            "filename": os.path.basename(file_path),
-                            "source_code": astor.to_source(node),
-                            "docstring": ast.get_docstring(node) or "",
-                        }
+                    file.add_code_unit(
+                        Function(
+                            name=node.name,
+                            source_code=astor.to_source(node),
+                            docstring=ast.get_docstring(node) or "",
+                        )
                     )
 
-            return code_units
+            return file
 
         except SyntaxError as e:
             self.logger.warning(f"Syntax error in {file_path}: {e}")
-            return []
+            raise
         except Exception as e:
             self.logger.error(f"Error processing {file_path}: {e}")
-            return []
+            raise
 
     def process_repository(
         self,
@@ -199,7 +201,7 @@ class GitHubCodeExtractor:
         output_path: Optional[str] = expanduser("~/code_assist/extracted_code_units"),
         max_files: Optional[int] = None,
         cleanup: bool = True,
-    ) -> List[Dict]:
+    ) -> CodebaseSnapshot:
         """
         Process an entire GitHub repository and extract code units.
 
@@ -210,7 +212,7 @@ class GitHubCodeExtractor:
             cleanup (bool): Whether to remove the cloned repository after processing
 
         Returns:
-            List of extracted code units
+            A CodebaseSnapshot containing all extracted code units
         """
         repo_path = self.clone_repository(repo_url)
 
@@ -220,25 +222,23 @@ class GitHubCodeExtractor:
         if max_files:
             python_files = python_files[:max_files]
 
+        snapshot = CodebaseSnapshot()
         # Extract code units from all files
-        all_code_units = []
         for file_path in python_files:
-            code_units = self.extract_code_units(file_path)
-            all_code_units.extend(code_units)
+            snapshot.add_file(self.extract_code_units(file_path))
 
         # Optionally save to JSON
         if output_path:
             output_file = os.path.join(output_path, f"{self.repo_name}_code_units.json")
             os.makedirs(output_path, exist_ok=True)
-            with open(output_file, "w", encoding="utf-8") as f:
-                json.dump(all_code_units, f, indent=2)
+            snapshot.to_json(Path(output_file))
 
         # Clean up temporary repository
         if cleanup:
             shutil.rmtree(repo_path)
 
-        self.logger.info(f"Extracted {len(all_code_units)} code units")
-        return all_code_units
+        self.logger.info(f"Extracted {len(snapshot)} code units")
+        return snapshot
 
 
 def main(
