@@ -1,11 +1,14 @@
 import json
 import os
+from pathlib import Path
 
 import fire
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
-from typing import List, Dict, Optional
+from typing import Optional
+
+from storage.code_store import CodebaseSnapshot, Class
 
 
 class CodeEmbedder:
@@ -28,6 +31,7 @@ class CodeEmbedder:
         self.model = self.model.to(self.device)
 
         self.max_length = max_length
+        self.embedding_dimension = self.model.config.hidden_size
 
     def generate_embedding(self, text: str) -> np.ndarray:
         """
@@ -66,41 +70,44 @@ class CodeEmbedder:
 
     def embed_code_units(
         self,
-        code_units: List[Dict],
-    ) -> List[Dict]:
+        codebase: CodebaseSnapshot,
+    ) -> CodebaseSnapshot:
         """
         Generate embeddings for a list of code units.
 
         Args:
-            code_units (List[Dict]): List of code units to embed
+            codebase (CodebaseSnapshot): Codebase snapshot containing code units
 
         Returns:
-            List of code units with added embeddings
+            Updated codebase snapshot with embedded code units.
         """
 
-        code_units_with_embeddings = code_units.copy()
+        for file in codebase:
+            for unit in file:
+                try:
+                    formatted_string = (
+                        f"type: {unit.unit_type}, "
+                        f"name: {unit.name}, "
+                        f"filepath: {unit.file.filepath}, "
+                        f"source_code: {unit.source_code}"
+                    )
+                    unit.embedding = self.generate_embedding(formatted_string)
 
-        for unit in code_units_with_embeddings:
-            try:
-                source_code = unit.get("source_code", "")
-                formatted_string = f"type: {unit['type']}, filepath: {unit['filepath']}, source_code: {source_code}"
-                embedding = self.generate_embedding(formatted_string)
+                    if isinstance(unit, Class):
+                        for method in unit.methods:
+                            formatted_string = (
+                                f"type: {method.unit_type}, "
+                                f"filepath: {method.class_ref.file.filepath}, "
+                                f"class: {method.class_ref.name}, "
+                                f"name: {method.name}, "
+                                f"source_code: {method.source_code}"
+                            )
+                            method.embedding = self.generate_embedding(formatted_string)
 
-                if embedding is not None:
-                    unit["embedding"] = embedding.tolist()
+                except Exception as e:
+                    print(f"Failed to embed unit {unit.name}: {e}")
 
-                if unit.get("methods"):
-                    for method in unit["methods"]:
-                        method_source = method.get("source_code", "")
-                        formatted_string = f"type: method, name: {method['name']}, class: {unit["name"]}, source_code: {method_source}"
-                        method_embedding = self.generate_embedding(formatted_string)
-                        if method_embedding is not None:
-                            method["embedding"] = method_embedding.tolist()
-
-            except Exception as e:
-                print(f"Failed to embed unit {unit.get('name', 'Unknown')}: {e}")
-
-        return code_units_with_embeddings
+        return codebase
 
 
 def process_embeddings(
@@ -134,26 +141,23 @@ def process_embeddings(
 
     # Load code units
     print(f"Loading code units from {input_path}")
-    with open(input_path, "r", encoding="utf-8") as f:
-        code_units = json.load(f)
+    codebase = CodebaseSnapshot.from_json(Path(input_path))
 
     # Initialize embedder
     embedder = CodeEmbedder(embedding_model=model_name)
 
     # Generate embeddings
     print("Generating embeddings...")
-    embedded_units = embedder.embed_code_units(code_units)
+    codebase_with_embeddings = embedder.embed_code_units(codebase)
 
     # Save results
     print(f"Saving embeddings to {output_path}")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(embedded_units, f, indent=2)
+    codebase_with_embeddings.to_json(Path(output_path))
 
     # Print statistics
     print("\nEmbedding Generation Summary:")
-    print(f"Total code units processed: {len(embedded_units)}")
-    if embedded_units:
-        print(f"Embedding dimension: {len(embedded_units[0]['embedding'])}")
+    print(f"Total code units processed: {len(codebase_with_embeddings)}")
+    print(f"Embedding dimension: {embedder.embedding_dimension}")
     print(f"Output saved to: {output_path}")
 
 

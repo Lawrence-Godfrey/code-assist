@@ -22,9 +22,11 @@ Requirements:
     - OpenAI API key in .env file
     - Pre-generated code embeddings in JSON format
 """
+
 import json
 import logging
 import os
+from pathlib import Path
 from typing import List, Optional
 
 import fire
@@ -32,6 +34,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from embedding.compare_embeddings import EmbeddingSimilaritySearch, SearchResult
 from embedding.generate_embeddings import CodeEmbedder
+from storage.code_store import CodebaseSnapshot
 
 load_dotenv()
 
@@ -40,21 +43,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class RAGEngine:
     def __init__(
-            self,
-            code_units_path: str,
-            prompt_model: Optional[str] = "gpt-4",
-            embedding_model: Optional[str] = "microsoft/codebert-base",
-            top_k: Optional[int] = 5,
-            threshold: Optional[float] = None,
-            logging_enabled: Optional[bool] = False,
+        self,
+        codebase: CodebaseSnapshot,
+        prompt_model: Optional[str] = "gpt-4",
+        embedding_model: Optional[str] = "microsoft/codebert-base",
+        top_k: Optional[int] = 5,
+        threshold: Optional[float] = None,
+        logging_enabled: Optional[bool] = False,
     ):
         """
         Initialises the RAG engine.
 
         Args:
-            code_units_path: Path to JSON file containing pre-embedded code units.
+            codebase: CodebaseSnapshot object containing code units and their embeddings.
             prompt_model: Name of the large LLM model to use for response
                 generation. Defaults to "gpt-4".
             embedding_model: Name of the model to use for generating embeddings.
@@ -74,19 +78,9 @@ class RAGEngine:
         self._threshold = threshold
         self._logging_enabled = logging_enabled
 
-        if not os.path.exists(code_units_path):
-            raise FileNotFoundError(
-                f"Embedded code units file not found: {code_units_path}\n" 
-                "Please provide the correct path to the JSON file."
-            )
-
-        # Load code units at initialization
-        with open(code_units_path, "r", encoding="utf-8") as f:
-            self._code_units = json.load(f)
-
         # Initialize embedder and similarity searcher
         self._embedder = CodeEmbedder(embedding_model=embedding_model)
-        self._searcher = EmbeddingSimilaritySearch(self._code_units)
+        self._searcher = EmbeddingSimilaritySearch(codebase=codebase)
 
         # Initialise large LLM client. At this point, only OpenAI is available.
         if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
@@ -132,25 +126,19 @@ class RAGEngine:
 
         # Find code units similar to the query
         similar_code_units = self._searcher.find_similar(
-            query_vector=query_vector,
-            top_k=self._top_k,
-            threshold=self._threshold
+            query_vector=query_vector, top_k=self._top_k, threshold=self._threshold
         )
 
         if self._logging_enabled:
             logging.info("Similar Code Units:\n")
             for result in similar_code_units:
                 logging.info(f"Similarity: {result.similarity_score}")
-                logging.info(f"Code unit: {result.code_unit.get('name')}")
+                logging.info(f"Code unit: {result.code_unit.name}")
                 logging.info("---")
 
         return similar_code_units
 
-    def _augment(
-            self,
-            query: str,
-            similar_code_units: List[SearchResult]
-    ) -> str:
+    def _augment(self, query: str, similar_code_units: List[SearchResult]) -> str:
         """
         Augments the original query with relevant code context.
 
@@ -183,26 +171,22 @@ class RAGEngine:
         prompt = f"Question: {query}\n\n"
         prompt += "Here is the relevant code context from the codebase:\n\n"
 
-        for i, code_unit in enumerate(similar_code_units, 1):
-            unit = code_unit.code_unit
+        for i, result in enumerate(similar_code_units, 1):
+            unit = result.code_unit
             prompt += f"[Code Unit {i}] "
-            prompt += f"Type: {unit.get('type', 'N/A')}  |  "
-            prompt += f"File: {unit.get('filepath', 'N/A')}\n"
-
-            # Add class context if it exists
-            if unit.get('class'):
-                prompt += f"Class: {unit['class']}\n"
+            prompt += f"Type: {unit.unit_type}  |  "
+            prompt += f"Full Name: {unit.fully_qualified_name()}\n"
 
             # Add source code
             prompt += "```python\n"
-            prompt += f"{unit.get('source_code', 'No source code available')}\n"
+            prompt += f"{unit.source_code}\n"
             prompt += "```\n"
 
             # Add docstring if it exists and isn't empty
-            if unit.get('docstring') and unit['docstring'].strip():
-                prompt += f"Documentation: {unit['docstring']}\n"
+            if unit.docstring.strip():
+                prompt += f"Documentation: {unit.docstring}\n"
 
-            prompt += f"Similarity Score: {code_unit.similarity_score:.2f}\n\n"
+            prompt += f"Similarity Score: {result.similarity_score:.2f}\n\n"
 
         prompt += "Based on the code context above, please "
         prompt += "provide a detailed answer to the question. "
@@ -227,9 +211,11 @@ class RAGEngine:
         response = self._client.chat.completions.create(
             model=self._prompt_model,
             messages=[
-                {"role": "system",
-                 "content": "You are a helpful assistant with expertise in Python programming."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant with expertise in Python programming.",
+                },
+                {"role": "user", "content": prompt},
             ],
         )
         response_message = response.choices[0].message.content
@@ -242,13 +228,13 @@ class RAGEngine:
 
 
 def main(
-        query: str,
-        code_units_path: str,
-        prompt_model: Optional[str] = "gpt-4",
-        embedding_model: Optional[str] = "microsoft/codebert-base",
-        top_k: Optional[int] = 5,
-        threshold: Optional[float] = None,
-        logging_enabled: Optional[bool] = True,
+    query: str,
+    code_units_path: str,
+    prompt_model: Optional[str] = "gpt-4",
+    embedding_model: Optional[str] = "microsoft/codebert-base",
+    top_k: Optional[int] = 5,
+    threshold: Optional[float] = None,
+    logging_enabled: Optional[bool] = True,
 ):
     """
     Command-line interface for testing and debugging the RAG engine.
@@ -273,15 +259,17 @@ def main(
                              --input_path "./code_units.json" \
                              --logging_enabled True
     """
-    code_units_path= os.path.abspath(code_units_path)
+    code_units_path = os.path.abspath(code_units_path)
     if not os.path.exists(code_units_path):
         raise FileNotFoundError(
             f"Embedded code units file not found: {code_units_path}\n"
             "Please provide the correct path to your code units JSON file."
         )
 
+    codebase = CodebaseSnapshot.from_json(Path(code_units_path))
+
     engine = RAGEngine(
-        code_units_path=code_units_path,
+        codebase=codebase,
         prompt_model=prompt_model,
         embedding_model=embedding_model,
         top_k=top_k,
@@ -289,6 +277,9 @@ def main(
         logging_enabled=logging_enabled,
     )
     response = engine.process(query=query)
+
+    return response
+
 
 if __name__ == "__main__":
     fire.Fire(main)
