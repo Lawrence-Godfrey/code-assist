@@ -1,17 +1,21 @@
-import json
 import os
 from pathlib import Path
 
 import fire
-import numpy as np
-import torch
-from transformers import AutoTokenizer, AutoModel
 from typing import Optional
 
-from storage.code_store import CodebaseSnapshot, Class
+from embedding.models.models import TransformersEmbeddingModel
+from storage.code_store import CodebaseSnapshot, Class, CodeEmbedding
 
 
 class CodeEmbedder:
+
+    MODEL_REGISTRY = {
+        "microsoft/codebert-base": TransformersEmbeddingModel,
+        "jinaai/jina-embeddings-v2-base-code": TransformersEmbeddingModel,
+        "jinaai/jina-embeddings-v3": TransformersEmbeddingModel,
+    }
+
     def __init__(
         self, embedding_model: str = "microsoft/codebert-base", max_length: int = 512
     ):
@@ -22,51 +26,17 @@ class CodeEmbedder:
             embedding_model (str): Hugging Face model for generating embeddings
             max_length (int): Maximum token length for input sequences
         """
-        # Load tokenizer and embedding model
-        self.tokenizer = AutoTokenizer.from_pretrained(embedding_model)
-        self.model = AutoModel.from_pretrained(embedding_model)
+        if embedding_model not in self.MODEL_REGISTRY:
+            raise ValueError(
+                f"Unsupported model: {embedding_model}. "
+                f"Supported models are: {list(self.MODEL_REGISTRY.keys())}"
+            )
 
-        # Move model to GPU if available
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = self.model.to(self.device)
+        # Initialize the appropriate model implementation
+        model_class = self.MODEL_REGISTRY[embedding_model]
+        self.model = model_class(embedding_model, max_length)
 
-        self.max_length = max_length
-        self.embedding_dimension = self.model.config.hidden_size
-
-    def generate_embedding(self, text: str) -> np.ndarray:
-        """
-        Generate an embedding vector for text (code or query).
-
-        Args:
-            text (str): Text to embed (can be code or natural language query)
-
-        Returns:
-            Normalized embedding vector
-        """
-        try:
-            # Tokenize the input
-            inputs = self.tokenizer(
-                text,
-                return_tensors="pt",
-                max_length=self.max_length,
-                truncation=True,
-                padding=True,
-            ).to(self.device)
-
-            # Generate embeddings
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-
-                # Use mean pooling over the last hidden state
-                embeddings = outputs.last_hidden_state.mean(dim=1)
-
-            # Normalize embedding to unit length
-            embedding = embeddings.cpu().numpy().flatten()
-            return embedding / np.linalg.norm(embedding)
-
-        except Exception as e:
-            print(f"Embedding generation error: {e}")
-            raise
+        self.embedding_dimension = self.model.model.config.hidden_size
 
     def embed_code_units(
         self,
@@ -91,7 +61,10 @@ class CodeEmbedder:
                         f"filepath: {unit.file.filepath}, "
                         f"source_code: {unit.source_code}"
                     )
-                    unit.embedding = self.generate_embedding(formatted_string)
+                    unit.embedding = CodeEmbedding(
+                        vector=self.model.generate_embedding(formatted_string),
+                        model_name=self.model.model_name,
+                    )
 
                     if isinstance(unit, Class):
                         for method in unit.methods:
@@ -102,7 +75,10 @@ class CodeEmbedder:
                                 f"name: {method.name}, "
                                 f"source_code: {method.source_code}"
                             )
-                            method.embedding = self.generate_embedding(formatted_string)
+                            method.embedding = CodeEmbedding(
+                                vector=self.model.generate_embedding(formatted_string),
+                                model_name=self.model.model_name,
+                            )
 
                 except Exception as e:
                     print(f"Failed to embed unit {unit.name}: {e}")
