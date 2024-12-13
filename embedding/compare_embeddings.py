@@ -1,12 +1,14 @@
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 import fire
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 from embedding.generate_embeddings import CodeEmbedder
+from storage.code_store import CodebaseSnapshot, CodeUnit
 
 
 @dataclass
@@ -17,24 +19,25 @@ class SearchResult:
     search results with their relevance scores.
     """
 
-    code_unit: Dict
+    code_unit: CodeUnit
     similarity_score: float
 
 
 class EmbeddingSimilaritySearch:
-    def __init__(self, code_units: List[Dict]):
+    def __init__(self, codebase: CodebaseSnapshot):
         """
         Initialize the similarity search engine with code units and their embeddings.
         Each code unit should be a dictionary containing an 'embedding' key with
         the vector representation of that code unit.
 
         Args:
-            code_units: List of dictionaries, where each dictionary represents a code unit
-                       and must contain an 'embedding' key with its vector representation
+            codebase: CodebaseSnapshot object containing code units and their embeddings.
         """
-        # Store the original code units for reference
-        code_units = self._normalise_code_units(code_units)
-        self.code_units = self._validate_code_units(code_units)
+
+        self.codebase = codebase
+
+        # Validate code units and embeddings
+        self._validate_code_units()
 
         # Create and normalize the embedding matrix for efficient computation
         self.embedding_matrix = self._create_embedding_matrix()
@@ -44,63 +47,31 @@ class EmbeddingSimilaritySearch:
             self.embedding_matrix.shape[1] if len(self.embedding_matrix) > 0 else 0
         )
 
-    def _normalise_code_units(self, code_units: List[Dict]) -> List[Dict]:
-
-        normalised_units = []
-
-        for unit in code_units:
-            normalised_units.append(unit)
-
-            if unit.get("methods"):
-                for method in unit["methods"]:
-                    method["filepath"] = unit["filepath"]
-                    method["class"] = unit["name"]
-                    method["type"] = "method"
-                    normalised_units.append(method)
-
-        return normalised_units
-
-    def _validate_code_units(
-        self, code_units: List[Dict], enforce_valid: bool = True
-    ) -> List[Dict]:
+    def _validate_code_units(self, enforce_valid: bool = True):
         """
         Validate that all code units have valid embeddings.
 
         Args:
-            code_units: List of code unit dictionaries to validate
             enforce_valid: Whether to raise an error for invalid embeddings
-
-        Returns:
-            List of valid code unit dictionaries
 
         Raises:
             ValueError: If no valid code units are provided or if embeddings are invalid
         """
-        if not code_units:
-            raise ValueError("No code units provided")
 
         valid_units = []
-        for unit in code_units:
-            if (
-                "embedding" in unit
-                and isinstance(unit["embedding"], (list, np.ndarray))
-                and len(unit["embedding"]) > 0
-            ):
+        for unit in self.codebase.iter_flat():
+            if unit.embedding is not None and len(unit.embedding) > 0:
                 valid_units.append(unit)
             elif enforce_valid:
-                raise ValueError(
-                    f"Invalid embedding found in code unit: {unit.get('name', 'No name found')}"
-                )
+                raise ValueError(f"Invalid embedding found in code unit: {unit.name}")
 
         if not valid_units:
             raise ValueError("No valid embeddings found in code units")
 
         # Verify all embeddings have the same dimensionality
-        first_dim = len(valid_units[0]["embedding"])
-        if not all(len(unit["embedding"]) == first_dim for unit in valid_units):
+        first_dim = len(valid_units[0].embedding)
+        if not all(len(unit.embedding) == first_dim for unit in valid_units):
             raise ValueError("All embeddings must have the same dimensionality")
-
-        return valid_units
 
     def _create_embedding_matrix(self) -> np.ndarray:
         """
@@ -111,8 +82,11 @@ class EmbeddingSimilaritySearch:
         """
         # Convert list of embeddings to a 2D numpy array
         embeddings = []
-        for unit in self.code_units:
-            embeddings.append(unit["embedding"])
+        self.unit_ids = []
+
+        for unit in self.codebase:
+            embeddings.append(unit.embedding)
+            self.unit_ids.append(unit.id)
 
         embedding_matrix = np.array(embeddings)
 
@@ -174,11 +148,14 @@ class EmbeddingSimilaritySearch:
         top_indices = np.argpartition(similarities, -top_k)[-top_k:]
         top_indices = top_indices[np.argsort(-similarities[top_indices])]
 
-        # Create search results
-        return [
-            SearchResult(self.code_units[valid_indices[idx]], float(similarities[idx]))
-            for idx in top_indices
-        ]
+        # Create search results using unit IDs to fetch code units
+        results = []
+        for idx in top_indices:
+            unit_id = self.unit_ids[valid_indices[idx]]
+            code_unit = self.codebase.get_unit_by_id(unit_id)
+            results.append(SearchResult(code_unit, float(similarities[idx])))
+
+        return results
 
     def search_by_type(
         self,
@@ -200,19 +177,14 @@ class EmbeddingSimilaritySearch:
             List of SearchResult objects containing matched code units and scores
         """
         # Create a mask for the specified type
-        type_mask = np.array(
-            [
-                unit.get("type", "").lower() == unit_type.lower()
-                for unit in self.code_units
-            ]
-        )
+        type_mask = np.array(self.codebase.get_units_by_type(unit_type), dtype=bool)
 
         if not np.any(type_mask):
             return []
 
         # Filter embedding matrix by type
         filtered_matrix = self.embedding_matrix[type_mask]
-        filtered_units = [u for u, m in zip(self.code_units, type_mask) if m]
+        filtered_unit_ids = np.array(self.unit_ids)[type_mask]
 
         # Use the filtered matrix for similarity search
         query_vector = np.array(query_vector)
@@ -230,7 +202,7 @@ class EmbeddingSimilaritySearch:
             if not np.any(mask):
                 return []
             similarities = similarities[mask]
-            filtered_units = [filtered_units[i] for i in np.where(mask)[0]]
+            filtered_unit_ids = filtered_unit_ids[mask]
 
         # Get top-k results
         top_k = min(top_k, len(similarities))
@@ -238,7 +210,10 @@ class EmbeddingSimilaritySearch:
         top_indices = top_indices[np.argsort(-similarities[top_indices])]
 
         return [
-            SearchResult(filtered_units[idx], float(similarities[idx]))
+            SearchResult(
+                self.codebase.get_unit_by_id(filtered_unit_ids[idx]),
+                float(similarities[idx]),
+            )
             for idx in top_indices
         ]
 
@@ -267,11 +242,10 @@ def compare(
 
     # Load code units
     print(f"Loading code units from {input_path}")
-    with open(input_path, "r", encoding="utf-8") as f:
-        code_units = json.load(f)
+    codebase = CodebaseSnapshot.from_json(Path(input_path))
 
     # Initialize comparer
-    searcher = EmbeddingSimilaritySearch(code_units)
+    searcher = EmbeddingSimilaritySearch(codebase)
 
     # Generate query embedding
     print(f"Query: {query}")
@@ -284,7 +258,7 @@ def compare(
 
     for result in results:
         print(
-            f"{result.code_unit['filepath']}: {result.code_unit.get('class', '')}.{result.code_unit['name']} - Similarity: {result.similarity_score}"
+            f"{result.code_unit.fully_qualified_name()} - Similarity: {result.similarity_score}"
         )
 
     # Save results

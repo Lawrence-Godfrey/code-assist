@@ -4,10 +4,9 @@ from os.path import expanduser
 from pathlib import Path
 
 import astor
-import json
 import shutil
 import logging
-from typing import List, Dict, Union, Optional
+from typing import List, Optional
 
 import git
 import fire
@@ -267,17 +266,19 @@ def main(
     )
 
     # Process the repository
-    code_units = extractor.process_repository(
+    codebase = extractor.process_repository(
         repo_url, max_files=max_files, output_path=output_path
     )
 
-    # Print some extracted units
-    for unit in code_units[:5]:
-        print(f"Name: {unit['name']}, Type: {unit['type']}")
-
-    if print_all:
-        for unit in code_units[5:]:
-            print(f"Name: {unit['name']}, Type: {unit['type']}")
+    if not print_all:
+        # Print some extracted units
+        for i, unit in enumerate(codebase.iter_flat()):
+            print(f"{unit.fully_qualified_name}, Type: {unit.unit_type}")
+            if i == 5:
+                break
+    else:
+        for unit in codebase:
+            print(f"{unit.fully_qualified_name}, Type: {unit.unit_type}")
 
 
 if __name__ == "__main__":

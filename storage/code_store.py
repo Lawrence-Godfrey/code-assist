@@ -1,8 +1,11 @@
+import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Iterable, Iterator, Dict
 from pathlib import Path
 import json
-from abc import ABC
+from abc import ABC, abstractmethod
+
+import numpy as np
 
 
 @dataclass
@@ -15,16 +18,24 @@ class CodeUnit(ABC):
     name: str
     source_code: str
     docstring: Optional[str] = None
-    unit_type: str = None
+    unit_type: str = field(init=False)
+    embedding: Optional[np.ndarray] = None
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def to_dict(self) -> dict:
         """Convert the code unit to a dictionary."""
         return {
+            "id": self.id,
             "type": self.unit_type,
             "name": self.name,
             "source_code": self.source_code,
             "docstring": self.docstring,
         }
+
+    @abstractmethod
+    def fully_qualified_name(self) -> str:
+        """Get the fully qualified name of the code unit."""
+        pass
 
     def __len__(self) -> int:
         """
@@ -33,24 +44,49 @@ class CodeUnit(ABC):
         """
         return 1
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["CodeUnit"]:
         """
         For code units which have sub-units (e.g. classes with methods),
         iterate through all sub-units.
         """
         yield self
 
+    def iter_flat(self) -> Iterator["CodeUnit"]:
+        """
+        Flat iteration yields self and then methods.
+        This is useful for generating embeddings for all code units.
+        """
+        yield self
+
 
 @dataclass
-class File(CodeUnit):
+class TopLevelCodeUnit(CodeUnit):
+    """
+    Represents a top-level code unit (function or class).
+    """
+
+    file: "File" = None
+
+    def to_dict(self) -> dict:
+        result = super().to_dict()
+        result["filepath"] = str(self.file.filepath)
+        return result
+
+    def fully_qualified_name(self) -> str:
+        """Get the fully qualified name of the code unit."""
+        return f"{self.file.filepath}:{self.name}"
+
+
+@dataclass
+class File(CodeUnit, Iterable[TopLevelCodeUnit]):
     """Represents a file containing code."""
 
     unit_type = "file"
     filepath: Path = None
-    _code_units: List[CodeUnit] = field(default_factory=list)  # Make private
+    _code_units: List[TopLevelCodeUnit] = field(default_factory=list)
 
     @property
-    def code_units(self) -> List[CodeUnit]:
+    def code_units(self) -> List[TopLevelCodeUnit]:
         """Get all code units in this file."""
         return self._code_units.copy()  # Return a copy to prevent direct modification
 
@@ -65,7 +101,7 @@ class File(CodeUnit):
         result["code_units"] = [unit.to_dict() for unit in self._code_units]
         return result
 
-    def add_code_unit(self, unit: CodeUnit) -> None:
+    def add_code_unit(self, unit: TopLevelCodeUnit) -> None:
         """Add a code unit to the file."""
         if unit.file is not None:
             unit.file.remove_code_unit(unit)  # Remove from old file if exists
@@ -89,13 +125,21 @@ class File(CodeUnit):
     def __len__(self):
         return sum(len(unit) for unit in self._code_units)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[TopLevelCodeUnit]:
         """
         Iterates through all code units in the file.
         This allows using: for unit in file
         """
+        yield from self._code_units
+
+    def iter_flat(self) -> Iterator[CodeUnit]:
+        """Flat iteration yields all units and their methods."""
         for unit in self._code_units:
-            yield from unit
+            yield from unit.iter_flat()
+
+    def fully_qualified_name(self) -> str:
+        """Get the fully qualified name of the code unit."""
+        return str(self.filepath)
 
 
 @dataclass
@@ -107,7 +151,7 @@ class Method(CodeUnit):
 
     def to_dict(self) -> dict:
         result = super().to_dict()
-        result["class"] = self._class
+        result["class"] = self._class.name
         return result
 
     @property
@@ -118,22 +162,34 @@ class Method(CodeUnit):
     def class_ref(self, value: "Class") -> None:
         self._class = value
 
+    @property
+    def filename(self) -> str:
+        """Get the filename from the filepath."""
+        return self.class_ref.file.filename
+
+    @property
+    def filepath(self) -> Path:
+        """Get the filepath of the class."""
+        return self.class_ref.file.filepath
+
+    def fully_qualified_name(self) -> str:
+        """Get the fully qualified name of the code unit."""
+        return f"{self.class_ref.fully_qualified_name()}.{self.name}"
+
 
 @dataclass
-class Function(CodeUnit):
+class Function(TopLevelCodeUnit):
     """Represents a standalone function."""
 
     unit_type = "function"
-    file: File = None
 
 
 @dataclass
-class Class(CodeUnit):
+class Class(TopLevelCodeUnit):
     """Represents a class definition."""
 
     unit_type = "class"
-    _methods: List[Method] = field(default_factory=list)  # Make private
-    file: File = None
+    _methods: List[Method] = field(default_factory=list)
 
     @property
     def methods(self) -> List[Method]:
@@ -167,17 +223,32 @@ class Class(CodeUnit):
     def __iter__(self):
         """
         Iterates through all code units in the class, including methods.
-        This allows using: for unit in class
+        This allows using: for method in class
         """
+        yield from self._methods
+
+    def iter_flat(self) -> Iterator[CodeUnit]:
+        """Flat iteration yields self and then methods."""
         yield self
         yield from self._methods
 
 
 @dataclass
-class CodebaseSnapshot:
+class CodebaseSnapshot(Iterable[File]):
     """Collection of code units representing a codebase at a point in time."""
 
     _files: List[File] = field(default_factory=list)
+    _id_cache: Dict[str, CodeUnit] = field(default_factory=dict, init=False)
+
+    def __post_init__(self):
+        """Builds the ID cache after initialization."""
+        self._rebuild_cache()
+
+    def _rebuild_cache(self) -> None:
+        """Rebuilds the cache mapping IDs to code units."""
+        self._id_cache.clear()
+        for unit in self.iter_flat():
+            self._id_cache[unit.id] = unit
 
     @classmethod
     def from_json(cls, json_path: Path) -> "CodebaseSnapshot":
@@ -190,7 +261,8 @@ class CodebaseSnapshot:
     @classmethod
     def from_dict(cls, data: List[dict]) -> "CodebaseSnapshot":
         """Create a CodebaseSnapshot from a list of dictionaries."""
-        files = []
+        new_class = cls()
+
         for file_data in data:
             file_data["filepath"] = Path(file_data["filepath"])
             file = File(**file_data)
@@ -202,9 +274,9 @@ class CodebaseSnapshot:
                 elif unit_type == "function":
                     file.add_code_unit(Function(**unit_data))
 
-            files.append(file)
+            new_class.add_file(file)
 
-        return cls(files)
+        return new_class
 
     def to_json(self, json_path: Path) -> None:
         """Save code units to a JSON file."""
@@ -218,8 +290,10 @@ class CodebaseSnapshot:
         return self._files.copy()  # Return a copy to prevent direct modification
 
     def add_file(self, file: File) -> None:
-        """Add a file to the codebase snapshot."""
+        """Add a file to the codebase snapshot and update the ID cache."""
         self._files.append(file)
+        for unit in file.iter_flat():
+            self._id_cache[unit.id] = unit
 
     def __len__(self) -> int:
         """
@@ -228,9 +302,45 @@ class CodebaseSnapshot:
         """
         return sum(len(file.code_units) for file in self._files)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[File]:
         """
         Iterates through all code units in the codebase, including methods within classes.
         This allows using: for unit in codebase_snapshot
         """
         yield from self._files
+
+    def iter_flat(self) -> Iterator[CodeUnit]:
+        """Flat iteration yields all units and their methods."""
+        for file in self._files:
+            yield from file.iter_flat()
+
+    def get_unit_by_id(self, unit_id: str) -> Optional[CodeUnit]:
+        """
+        Retrieves a code unit by its ID.
+
+        Args:
+            unit_id: The unique identifier of the code unit
+
+        Returns:
+            The code unit if found, None otherwise
+        """
+        return self._id_cache.get(unit_id)
+
+    @property
+    def classes(self) -> List[Class]:
+        """Get all class definitions"""
+        return [unit for unit in self.iter_flat() if isinstance(unit, Class)]
+
+    @property
+    def methods(self) -> List[Method]:
+        """Get all method definitions"""
+        return [unit for unit in self.iter_flat() if isinstance(unit, Method)]
+
+    @property
+    def functions(self) -> List[Function]:
+        """Get all function definitions"""
+        return [unit for unit in self.iter_flat() if isinstance(unit, Function)]
+
+    def get_units_by_type(self, unit_type: str) -> List[CodeUnit]:
+        """Get all code units of a specific type"""
+        return [unit for unit in self.iter_flat() if unit.unit_type == unit_type]
