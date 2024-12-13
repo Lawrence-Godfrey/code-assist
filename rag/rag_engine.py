@@ -73,10 +73,6 @@ class RAGEngine:
         self._top_k = top_k
         self._threshold = threshold
         self._logging_enabled = logging_enabled
-        self._query = ""
-        self._prompt = ""
-        self._response = ""
-        self._similar_code_units = []
 
         if not os.path.exists(code_units_path):
             raise FileNotFoundError(
@@ -93,7 +89,7 @@ class RAGEngine:
         self._searcher = EmbeddingSimilaritySearch(self._code_units)
 
         # Initialise large LLM client. At this point, only OpenAI is available.
-        if self._prompt_model in ("gpt-4", "gpt-4o, gpt-4o-mini, gpt-4-turbo"):
+        if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
             self._client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         else:
             raise ValueError(f"The model {self._prompt_model} is not supported.")
@@ -111,28 +107,31 @@ class RAGEngine:
             query: The user's prompt to which RAG will be applied
 
         Returns:
-            str: The generated response that answers the query using relevant
-                code context.
+            response (str): The generated response that answers the query using
+                relevant code context.
         """
-        self._query = query
-        self._retriever()
-        self._augmentor()
-        self._generator()
+        similar_code_units = self._retrieve(query)
+        prompt = self._augment(query, similar_code_units)
+        response = self._generate(prompt)
 
-        return self._response
+        return response
 
-
-    def _retriever(self) -> None:
+    def _retrieve(self, query: str) -> List[SearchResult]:
         """
         Retrieves relevant code units by computing similarity with the query.
 
-        The retrieved code units are stored in self._similar_code_units for use
-        by the augmentor.
+        Args:
+            query (str): The user's prompt which will be used to find similar
+                code units.
+
+        Returns:
+            similar_code_units (List[SearchResult]): The k most similar code
+                units to the query, in order from most similar to least similar.
         """
-        query_vector = self._embedder.generate_embedding(self._query)
+        query_vector = self._embedder.generate_embedding(query)
 
         # Find code units similar to the query
-        self._similar_code_units = self._searcher.find_similar(
+        similar_code_units = self._searcher.find_similar(
             query_vector=query_vector,
             top_k=self._top_k,
             threshold=self._threshold
@@ -140,13 +139,18 @@ class RAGEngine:
 
         if self._logging_enabled:
             logging.info("Similar Code Units:\n")
-            for result in self._similar_code_units:
+            for result in similar_code_units:
                 logging.info(f"Similarity: {result.similarity_score}")
                 logging.info(f"Code unit: {result.code_unit.get('name')}")
                 logging.info("---")
 
+        return similar_code_units
 
-    def _augmentor(self) -> None:
+    def _augment(
+            self,
+            query: str,
+            similar_code_units: List[SearchResult]
+    ) -> str:
         """
         Augments the original query with relevant code context.
 
@@ -167,57 +171,74 @@ class RAGEngine:
 
            Based on the code context above, please provide a detailed answer...
 
-        The constructed prompt is stored in self._prompt for use by the generator.
-        """
-        self._prompt = f"Question: {self._query}\n\n"
-        self._prompt += "Here is the relevant code context from the codebase:\n\n"
+        Args:
+            query (str): The user's prompt which will be augmented with similar
+                code units for context
+            similar_code_units List[SearchResult]: The k most similar code units
+                to the query, in order from most similar to least similar.
 
-        for i, code_unit in enumerate(self._similar_code_units, 1):
+        Returns:
+            prompt (str): The augmented prompt.
+        """
+        prompt = f"Question: {query}\n\n"
+        prompt += "Here is the relevant code context from the codebase:\n\n"
+
+        for i, code_unit in enumerate(similar_code_units, 1):
             unit = code_unit.code_unit
-            self._prompt += f"[Code Unit {i}] "
-            self._prompt += f"Type: {unit.get('type', 'N/A')}  |  "
-            self._prompt += f"File: {unit.get('filepath', 'N/A')}\n"
+            prompt += f"[Code Unit {i}] "
+            prompt += f"Type: {unit.get('type', 'N/A')}  |  "
+            prompt += f"File: {unit.get('filepath', 'N/A')}\n"
 
             # Add class context if it exists
             if unit.get('class'):
-                self._prompt += f"Class: {unit['class']}\n"
+                prompt += f"Class: {unit['class']}\n"
 
             # Add source code
-            self._prompt += "```python\n"
-            self._prompt += f"{unit.get('source_code', 'No source code available')}\n"
-            self._prompt += "```\n"
+            prompt += "```python\n"
+            prompt += f"{unit.get('source_code', 'No source code available')}\n"
+            prompt += "```\n"
 
             # Add docstring if it exists and isn't empty
             if unit.get('docstring') and unit['docstring'].strip():
-                self._prompt += f"Documentation: {unit['docstring']}\n"
+                prompt += f"Documentation: {unit['docstring']}\n"
 
-            self._prompt += f"Similarity Score: {code_unit.similarity_score:.2f}\n\n"
+            prompt += f"Similarity Score: {code_unit.similarity_score:.2f}\n\n"
 
-        self._prompt += "Based on the code context above, please "
-        self._prompt += "provide a detailed answer to the question. "
-        self._prompt += "Reference specific parts of the code where relevant.\n"
+        prompt += "Based on the code context above, please "
+        prompt += "provide a detailed answer to the question. "
+        prompt += "Reference specific parts of the code where relevant.\n"
 
         if self._logging_enabled:
             logging.info("\nAugmented Prompt:\n")
-            logging.info(self._prompt)
+            logging.info(prompt)
 
-    def _generator(self) -> None:
+        return prompt
+
+    def _generate(self, prompt) -> str:
         """
         Generates a response using the augmented prompt via the OpenAI API.
+
+        Args:
+            prompt (str): The augmented prompt.
+
+        Returns:
+            response_message (str): The generated response from the large LLM.
         """
         response = self._client.chat.completions.create(
             model=self._prompt_model,
             messages=[
                 {"role": "system",
                  "content": "You are a helpful assistant with expertise in Python programming."},
-                {"role": "user", "content": self._prompt}
+                {"role": "user", "content": prompt}
             ],
         )
-        self._response = response.choices[0].message.content
+        response_message = response.choices[0].message.content
 
         if self._logging_enabled:
             logging.info("\nGenerated Response:\n")
-            logging.info(self._response)
+            logging.info(response_message)
+
+        return response_message
 
 
 def main(
