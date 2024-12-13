@@ -1,13 +1,14 @@
 import json
 import os
+from pathlib import Path
 
 import fire
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
-from typing import List, Dict, Optional
+from typing import Optional
 
-from storage.code_store import CodebaseSnapshot, Method, Class
+from storage.code_store import CodebaseSnapshot, Class
 
 
 class CodeEmbedder:
@@ -140,8 +141,7 @@ def process_embeddings(
 
     # Load code units
     print(f"Loading code units from {input_path}")
-    with open(input_path, "r", encoding="utf-8") as f:
-        codebase = CodebaseSnapshot.from_json(json.load(f))
+    codebase = CodebaseSnapshot.from_json(Path(input_path))
 
     # Initialize embedder
     embedder = CodeEmbedder(embedding_model=model_name)
@@ -152,14 +152,12 @@ def process_embeddings(
 
     # Save results
     print(f"Saving embeddings to {output_path}")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(codebase_with_embeddings, f, indent=2)
+    codebase_with_embeddings.to_json(Path(output_path))
 
     # Print statistics
     print("\nEmbedding Generation Summary:")
     print(f"Total code units processed: {len(codebase_with_embeddings)}")
-    if codebase_with_embeddings:
-        print(f"Embedding dimension: {len(codebase_with_embeddings[0]['embedding'])}")
+    print(f"Embedding dimension: {embedder.embedding_dimension}")
     print(f"Output saved to: {output_path}")
 
 

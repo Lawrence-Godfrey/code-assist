@@ -24,13 +24,18 @@ class CodeUnit(ABC):
 
     def to_dict(self) -> dict:
         """Convert the code unit to a dictionary."""
-        return {
+        output = {
             "id": self.id,
-            "type": self.unit_type,
+            "unit_type": self.unit_type,
             "name": self.name,
             "source_code": self.source_code,
             "docstring": self.docstring,
         }
+
+        if self.embedding is not None:
+            output["embedding"] = self.embedding.tolist()
+
+        return output
 
     @abstractmethod
     def fully_qualified_name(self) -> str:
@@ -72,6 +77,14 @@ class TopLevelCodeUnit(CodeUnit):
         result["filepath"] = str(self.file.filepath)
         return result
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "TopLevelCodeUnit":
+        """Create a TopLevelCodeUnit from a dictionary."""
+        if data["unit_type"] == "class":
+            return Class.from_dict(data)
+        elif data["unit_type"] == "function":
+            return Function.from_dict(data)
+
     def fully_qualified_name(self) -> str:
         """Get the fully qualified name of the code unit."""
         return f"{self.file.filepath}:{self.name}"
@@ -101,6 +114,23 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
         result["code_units"] = [unit.to_dict() for unit in self._code_units]
         return result
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "File":
+        """Create a File from a dictionary."""
+        code_units_data = data.pop("code_units", [])
+        file = cls(
+            name=data["name"],
+            source_code=data["source_code"],
+            docstring=data.get("docstring"),
+            id=data["id"],
+            filepath=Path(data["filepath"]),
+            embedding=data.get("embedding"),
+        )
+        for unit_data in code_units_data:
+            unit = TopLevelCodeUnit.from_dict(unit_data)
+            file.add_code_unit(unit)
+        return file
+
     def add_code_unit(self, unit: TopLevelCodeUnit) -> None:
         """Add a code unit to the file."""
         if unit.file is not None:
@@ -108,7 +138,7 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
         self._code_units.append(unit)
         unit.file = self  # Update the back reference
 
-    def remove_code_unit(self, unit: CodeUnit) -> None:
+    def remove_code_unit(self, unit: TopLevelCodeUnit) -> None:
         """Remove a code unit from the file."""
         if unit in self._code_units:
             self._code_units.remove(unit)
@@ -154,6 +184,18 @@ class Method(CodeUnit):
         result["class"] = self._class.name
         return result
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "Method":
+        """Create a Method from a dictionary."""
+        method = cls(
+            name=data["name"],
+            source_code=data["source_code"],
+            docstring=data.get("docstring"),
+            id=data["id"],
+            embedding=data.get("embedding"),
+        )
+        return method
+
     @property
     def class_ref(self) -> "Class":
         return self._class
@@ -182,6 +224,18 @@ class Function(TopLevelCodeUnit):
     """Represents a standalone function."""
 
     unit_type = "function"
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Function":
+        """Create a Function from a dictionary."""
+        function = cls(
+            name=data["name"],
+            source_code=data["source_code"],
+            docstring=data.get("docstring"),
+            id=data["id"],
+            embedding=data.get("embedding"),
+        )
+        return function
 
 
 @dataclass
@@ -216,6 +270,22 @@ class Class(TopLevelCodeUnit):
         result = super().to_dict()
         result["methods"] = [method.to_dict() for method in self._methods]
         return result
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Class":
+        """Create a Class from a dictionary."""
+        methods_data = data.pop("methods", [])
+        new_class = cls(
+            name=data["name"],
+            source_code=data["source_code"],
+            docstring=data.get("docstring"),
+            id=data["id"],
+            embedding=data.get("embedding"),
+        )
+        for method_data in methods_data:
+            method = Method.from_dict(method_data)
+            new_class.add_method(method)
+        return new_class
 
     def __len__(self):
         return 1 + sum(len(method) for method in self._methods)
@@ -261,22 +331,13 @@ class CodebaseSnapshot(Iterable[File]):
     @classmethod
     def from_dict(cls, data: List[dict]) -> "CodebaseSnapshot":
         """Create a CodebaseSnapshot from a list of dictionaries."""
-        new_class = cls()
+        codebase = cls()
 
         for file_data in data:
-            file_data["filepath"] = Path(file_data["filepath"])
-            file = File(**file_data)
-            code_units_data = file_data.pop("code_units", [])
-            for unit_data in code_units_data:
-                unit_type = unit_data["type"]
-                if unit_type == "class":
-                    file.add_code_unit(Class(**unit_data))
-                elif unit_type == "function":
-                    file.add_code_unit(Function(**unit_data))
+            file = File.from_dict(file_data)
+            codebase.add_file(file)
 
-            new_class.add_file(file)
-
-        return new_class
+        return codebase
 
     def to_json(self, json_path: Path) -> None:
         """Save code units to a JSON file."""

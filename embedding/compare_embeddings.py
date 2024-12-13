@@ -84,7 +84,7 @@ class EmbeddingSimilaritySearch:
         embeddings = []
         self.unit_ids = []
 
-        for unit in self.codebase:
+        for unit in self.codebase.iter_flat():
             embeddings.append(unit.embedding)
             self.unit_ids.append(unit.id)
 
@@ -267,7 +267,7 @@ def compare(
         for result in results:
             json_results.append(
                 {
-                    "unit": result.code_unit,
+                    "unit": result.code_unit.to_dict(),
                     "similarity": result.similarity_score,
                 }
             )
