@@ -121,14 +121,12 @@ class RagEngine:
 
     def _generator(self) -> None:
         response = self._client.chat.completions.create(
-            model="gpt-4",
+            model=self._model,
             messages=[
                 {"role": "system",
                  "content": "You are a helpful assistant with expertise in Python programming."},
                 {"role": "user", "content": self._prompt}
             ],
-            temperature=0.7,
-            max_tokens=1000
         )
         self._response = response.choices[0].message.content
 
