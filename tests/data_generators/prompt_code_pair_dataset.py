@@ -1,4 +1,5 @@
 import json
+import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -6,6 +7,81 @@ from typing import List, Dict, Optional, Iterator
 from uuid import uuid4
 
 from storage.code_store import CodeUnit, CodebaseSnapshot
+
+
+@dataclass
+class SplitConfig:
+    """Configuration for dataset splitting"""
+
+    train_ratio: float = 0.7
+    validation_ratio: float = 0.15
+    test_ratio: float = 0.15
+    random_seed: Optional[int] = None  # Specify random seed for reproducibility
+
+    def __post_init__(self):
+        """
+        Validate split ratios.
+
+        Ensures:
+        1. All ratios sum to 1.0
+        2. Train ratio is greater than 0
+        3. Test ratio is greater than 0
+        4. Validation ratio is non-negative
+        """
+        # Check ratios sum to 1
+        total = self.train_ratio + self.validation_ratio + self.test_ratio
+        if not abs(total - 1.0) < 1e-10:  # Using epsilon for float comparison
+            raise ValueError(f"Split ratios must sum to 1.0, got {total}")
+
+        # Check train ratio
+        if self.train_ratio <= 0:
+            raise ValueError(f"Train ratio must be greater than 0, got {self.train_ratio}")
+
+        # Check test ratio
+        if self.test_ratio <= 0:
+            raise ValueError(f"Test ratio must be greater than 0, got {self.test_ratio}")
+
+        # Check validation ratio is non-negative
+        if self.validation_ratio < 0:
+            raise ValueError(f"Validation ratio cannot be negative, got {self.validation_ratio}")
+
+    def save_config(
+        self,
+        output_dir: Path,
+        train_samples: int,
+        validation_samples: int,
+        test_samples: int
+    ) -> None:
+        """
+        Save split configuration and results to JSON file.
+
+        Args:
+            output_dir: Directory to save configuration
+            train_samples: Number of training samples
+            validation_samples: Number of validation samples
+            test_samples: Number of test samples
+        """
+        total_samples = train_samples + validation_samples + test_samples
+
+        config_data = {
+            "ratios": {
+                "train_ratio": self.train_ratio,
+                "validation_ratio": self.validation_ratio,
+                "test_ratio": self.test_ratio
+            },
+            "random_seed": self.random_seed,
+            "samples": {
+                "total_samples": total_samples,
+                "train_samples": train_samples,
+                "validation_samples": validation_samples,
+                "test_samples": test_samples
+            },
+            "created_at": datetime.now().isoformat()
+        }
+
+        config_path = output_dir / "split_config.json"
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=2)
 
 
 @dataclass
@@ -145,6 +221,128 @@ class PromptCodePairDataset:
             if predicate(pair):
                 new_dataset.add_pair(pair)
         return new_dataset
+
+    def create_splits(
+        self,
+        output_dir: Path,
+        config: Optional[SplitConfig] = None
+    ) -> Dict[str, "PromptCodePairDataset"]:
+        """
+        Create dataset splits based on provided configuration and save them.
+
+        Args:
+            output_dir: Directory where split datasets will be saved
+            config: Configuration for splitting. If None, uses default ratios
+
+        Returns:
+            Dictionary containing the created datasets with keys:
+            'train', 'validation' (if any), and 'test'
+        """
+        if config is None:
+            config = SplitConfig()
+
+        # Ensure output directory exists
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set random seed if provided
+        if config.random_seed is not None:
+            random.seed(config.random_seed)
+
+        # Shuffle pairs
+        all_pairs = self._pairs.copy()
+        random.shuffle(all_pairs)
+
+        # Calculate split indices
+        total_size = len(all_pairs)
+        train_size = int(total_size * config.train_ratio)
+        val_size = int(total_size * config.validation_ratio)
+        test_size = total_size - train_size - val_size
+
+        # Initialize result dictionary
+        split_datasets = {}
+
+        # Create and save train dataset
+        train_pairs = all_pairs[:train_size]
+        train_dataset = PromptCodePairDataset()
+        for pair in train_pairs:
+            train_dataset.add_pair(pair)
+        train_dataset.to_json(
+            output_dir / "train_prompt_code_pair_dataset.json"
+        )
+        split_datasets['train'] = train_dataset
+
+        # Create validation dataset if validation ratio > 0
+        if config.validation_ratio > 0:
+            val_pairs = all_pairs[train_size: train_size + val_size]
+            val_dataset = PromptCodePairDataset()
+            for pair in val_pairs:
+                val_dataset.add_pair(pair)
+            val_dataset.to_json(
+                output_dir / "validate_prompt_code_pair_dataset.json"
+            )
+            split_datasets['validation'] = val_dataset
+
+        test_pairs = all_pairs[train_size + val_size:]
+        test_dataset = PromptCodePairDataset()
+        for pair in test_pairs:
+            test_dataset.add_pair(pair)
+        test_dataset.to_json(
+            output_dir / "test_prompt_code_pair_dataset.json"
+        )
+        split_datasets['test'] = test_dataset
+
+        # Save configuration
+        config.save_config(
+            output_dir,
+            train_samples=train_size,
+            validation_samples=val_size,
+            test_samples=test_size,
+        )
+
+        return split_datasets
+
+    @staticmethod
+    def load_splits(
+        split_dir: Path,
+        codebase: CodebaseSnapshot
+    ) -> Dict[str, "PromptCodePairDataset"]:
+        """
+        Load previously created dataset splits.
+
+        Args:
+            split_dir: Directory containing the split datasets
+            codebase: Codebase to link code units
+
+        Returns:
+            Dictionary containing the available datasets with keys: 'train', 'validation' (if present), 'test'
+        """
+        split_dir = Path(split_dir)
+        splits = {}
+
+        # Load training dataset (required)
+        train_path = split_dir / "train_prompt_code_pair_dataset.json"
+        if not train_path.exists():
+            raise FileNotFoundError(
+                "Training dataset not found in splits directory"
+            )
+
+        # Load testing dataset (required)
+        test_path = split_dir / "test_prompt_code_pair_dataset.json"
+        if not test_path.exists():
+            raise FileNotFoundError(
+                "Test dataset not found in splits directory"
+            )
+
+        splits['train'] = PromptCodePairDataset.from_json(train_path, codebase)
+        splits['test'] = PromptCodePairDataset.from_json(test_path, codebase)
+
+        # Try loading validation dataset
+        val_path = split_dir / "validate_prompt_code_pair_dataset.json"
+        if val_path.exists():
+            splits['validation'] = PromptCodePairDataset.from_json(val_path, codebase)
+
+        return splits
 
     def __len__(self) -> int:
         """Get the number of pairs in the dataset."""
