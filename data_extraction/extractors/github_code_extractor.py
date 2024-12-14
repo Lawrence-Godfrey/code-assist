@@ -273,12 +273,12 @@ def main(
     if not print_all:
         # Print some extracted units
         for i, unit in enumerate(codebase.iter_flat()):
-            print(f"{unit.fully_qualified_name}, Type: {unit.unit_type}")
+            print(f"{unit.fully_qualified_name()}, Type: {unit.unit_type}")
             if i == 5:
                 break
     else:
         for unit in codebase:
-            print(f"{unit.fully_qualified_name}, Type: {unit.unit_type}")
+            print(f"{unit.fully_qualified_name()}, Type: {unit.unit_type}")
 
 
 if __name__ == "__main__":

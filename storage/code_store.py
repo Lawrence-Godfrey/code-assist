@@ -1,11 +1,58 @@
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional, Iterable, Iterator, Dict
+from typing import List, Optional, Iterable, Iterator, Dict, Union
 from pathlib import Path
 import json
 from abc import ABC, abstractmethod
 
 import numpy as np
+
+
+@dataclass
+class CodeEmbedding:
+    """
+    Represents an embedding vector along with metadata about how it was generated.
+    This allows tracking which model was used and with what parameters.
+    """
+
+    vector: np.ndarray
+    model_name: str
+
+    def __init__(self, vector: Union[List[float], np.ndarray], model_name: str):
+        """
+        Initialize a CodeEmbedding from either a list or numpy array.
+
+        Args:
+            vector: The embedding vector as a list or numpy array
+            model_name: The name of the embedding model used
+        """
+        if isinstance(vector, list):
+            self.vector = np.array(vector)
+        elif isinstance(vector, np.ndarray):
+            self.vector = vector
+        else:
+            raise ValueError("Invalid type for embedding vector")
+
+        self.model_name = model_name
+
+    def __list__(self) -> List[float]:
+        """Convert the embedding vector to a list."""
+        return self.vector.tolist()
+
+    def __len__(self) -> int:
+        """Get the length of the embedding vector."""
+        return len(self.vector)
+
+    def to_dict(self) -> dict:
+        """Convert the code embedding to a dictionary."""
+        return {"vector": self.vector.tolist(), "model_name": self.model_name}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Optional["CodeEmbedding"]:
+        """Create a CodeEmbedding from a dictionary."""
+        if data is None:
+            return None
+        return cls(vector=np.array(data["vector"]), model_name=data["model_name"])
 
 
 @dataclass
@@ -19,7 +66,7 @@ class CodeUnit(ABC):
     source_code: str
     docstring: Optional[str] = None
     unit_type: str = field(init=False)
-    embedding: Optional[np.ndarray] = None
+    embedding: Optional[CodeEmbedding] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def to_dict(self) -> dict:
@@ -33,7 +80,7 @@ class CodeUnit(ABC):
         }
 
         if self.embedding is not None:
-            output["embedding"] = self.embedding.tolist()
+            output["embedding"] = self.embedding.to_dict()
 
         return output
 
@@ -124,7 +171,7 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
             docstring=data.get("docstring"),
             id=data["id"],
             filepath=Path(data["filepath"]),
-            embedding=data.get("embedding"),
+            embedding=CodeEmbedding.from_dict(data.get("embedding")),
         )
         for unit_data in code_units_data:
             unit = TopLevelCodeUnit.from_dict(unit_data)
@@ -192,7 +239,7 @@ class Method(CodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embedding=data.get("embedding"),
+            embedding=CodeEmbedding.from_dict(data.get("embedding")),
         )
         return method
 
@@ -233,7 +280,7 @@ class Function(TopLevelCodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embedding=data.get("embedding"),
+            embedding=CodeEmbedding.from_dict(data.get("embedding")),
         )
         return function
 
@@ -280,7 +327,7 @@ class Class(TopLevelCodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embedding=data.get("embedding"),
+            embedding=CodeEmbedding.from_dict(data.get("embedding")),
         )
         for method_data in methods_data:
             method = Method.from_dict(method_data)

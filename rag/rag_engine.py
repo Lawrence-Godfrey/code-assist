@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from embedding.compare_embeddings import EmbeddingSimilaritySearch, SearchResult
 from embedding.generate_embeddings import CodeEmbedder
-from storage.code_store import CodebaseSnapshot
+from storage.code_store import CodebaseSnapshot, CodeEmbedding
 
 load_dotenv()
 
@@ -122,11 +122,15 @@ class RAGEngine:
             similar_code_units (List[SearchResult]): The k most similar code
                 units to the query, in order from most similar to least similar.
         """
-        query_vector = self._embedder.generate_embedding(query)
-
+        query_vector = self._embedder.model.generate_embedding(query)
+        query_embedding = CodeEmbedding(
+            vector=query_vector, model_name=self._embedder.model.model_name
+        )
         # Find code units similar to the query
         similar_code_units = self._searcher.find_similar(
-            query_vector=query_vector, top_k=self._top_k, threshold=self._threshold
+            query_embedding=query_embedding,
+            top_k=self._top_k,
+            threshold=self._threshold,
         )
 
         if self._logging_enabled:
