@@ -71,10 +71,7 @@ class AbstractPromptGenerator(ABC):
 
     def _filter_code_units(self) -> List[CodeUnit]:
         """Filter and limit code units based on configuration."""
-        filtered_units = [
-            unit for unit in self.codebase.iter_flat()
-            if unit.unit_type in self.unit_types
-        ]
+        filtered_units = self.codebase.get_units_by_type(self.unit_types)
 
         if self.num_rows is not None:
             if self.num_rows < len(filtered_units):
