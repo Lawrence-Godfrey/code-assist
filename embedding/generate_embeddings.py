@@ -4,7 +4,7 @@ from pathlib import Path
 import fire
 from typing import Optional
 
-from embedding.models.models import TransformersEmbeddingModel
+from embedding.models.models import TransformersEmbeddingModel, OpenAIEmbeddingModel
 from storage.code_store import CodebaseSnapshot, Class, CodeEmbedding
 
 
@@ -14,6 +14,9 @@ class CodeEmbedder:
         "microsoft/codebert-base": TransformersEmbeddingModel,
         "jinaai/jina-embeddings-v2-base-code": TransformersEmbeddingModel,
         "jinaai/jina-embeddings-v3": TransformersEmbeddingModel,
+        "text-embedding-3-small": OpenAIEmbeddingModel,
+        "text-embedding-3-large": OpenAIEmbeddingModel,
+        "text-embedding-ada-002": OpenAIEmbeddingModel,
     }
 
     def __init__(
@@ -24,7 +27,8 @@ class CodeEmbedder:
 
         Args:
             embedding_model (str): Hugging Face model for generating embeddings
-            max_length (int): Maximum token length for input sequences
+            max_length (int): Maximum token length for input sequences (not
+                applicable to OpenAIEmbeddingModel)
         """
         if embedding_model not in self.MODEL_REGISTRY:
             raise ValueError(
@@ -34,9 +38,13 @@ class CodeEmbedder:
 
         # Initialize the appropriate model implementation
         model_class = self.MODEL_REGISTRY[embedding_model]
-        self.model = model_class(embedding_model, max_length)
 
-        self.embedding_dimension = self.model.model.config.hidden_size
+        if model_class.__name__ == "TransformersEmbeddingModel":
+            self.model = model_class(embedding_model, max_length)
+        elif model_class.__name__ == "OpenAIEmbeddingModel":
+            self.model = model_class(embedding_model)
+
+        self.embedding_dimension = self.model.embedding_dimension
 
     def embed_code_units(
         self,

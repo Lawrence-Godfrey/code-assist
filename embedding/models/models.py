@@ -2,8 +2,11 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import torch
+from dotenv import load_dotenv
+from openai import OpenAI
 from transformers import AutoTokenizer, AutoModel
 
+load_dotenv()
 
 class BaseEmbeddingModel(ABC):
     """Abstract base class for embedding models."""
@@ -73,3 +76,50 @@ class TransformersEmbeddingModel(BaseEmbeddingModel):
     def embedding_dimension(self) -> int:
         """Get the dimension of the embedding vector."""
         return self.model.config.hidden_size
+
+
+class OpenAIEmbeddingModel(BaseEmbeddingModel):
+    """Implementation for OpenAI API-based embedding models."""
+
+    # We hardcode the model-embedding-size pairs here instead of sending an
+    # extra query to the OpenAI API for model information
+    MODELS = {
+        "text-embedding-3-small": 1536,
+        "text-embedding-3-large": 3072,
+        "text-embedding-ada-002": 1536
+    }
+
+    def __init__(self, model_name: str):
+        """
+        Initialize the OpenAI embedding model.
+
+        Args:
+            model_name: Name of the OpenAI embedding model
+        """
+        self.model_name = model_name
+        self._embedding_dimension = self.MODELS[model_name]
+        self.client = OpenAI()
+
+    def generate_embedding(self, text: str) -> np.ndarray:
+        """Generate an embedding vector for the given text."""
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=text,
+                encoding_format="float"
+            )
+
+            # Extract the embedding vector from the response
+            embedding = np.array(response.data[0].embedding)
+
+            # OpenAI embeddings are already normalized, but for consistency...
+            return embedding / np.linalg.norm(embedding)
+
+        except Exception as e:
+            print(f"OpenAI embedding generation error: {e}")
+            raise
+
+    @property
+    def embedding_dimension(self) -> int:
+        """Get the dimension of the embedding vector."""
+        return self._embedding_dimension
