@@ -402,8 +402,6 @@ class CodebaseSnapshot(Iterable[File]):
         """Get all function definitions"""
         return [unit for unit in self.iter_flat() if isinstance(unit, Function)]
 
-    def get_units_by_type(self, unit_type: Union[str, List[str]]) -> List[CodeUnit]:
+    def get_units_by_type(self, unit_type: str) -> List[CodeUnit]:
         """Get all code units of a specific type"""
-        if isinstance(unit_type, str):
-            unit_type = [unit_type]
-        return [unit for unit in self.iter_flat() if unit.unit_type in unit_type]
+        return [unit for unit in self.iter_flat() if unit.unit_type == unit_type]

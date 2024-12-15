@@ -8,7 +8,7 @@ import numpy as np
 from typing import List, Optional
 
 from embedding.generate_embeddings import CodeEmbedder
-from storage.code_store import CodebaseSnapshot, CodeUnit
+from storage.code_store import CodebaseSnapshot, CodeUnit, CodeEmbedding
 
 
 @dataclass
@@ -37,7 +37,7 @@ class EmbeddingSimilaritySearch:
         self.codebase = codebase
 
         # Validate code units and embeddings
-        self._validate_code_units()
+        self.valid_units = self._validate_code_units()
 
         # Create and normalize the embedding matrix for efficient computation
         self.embedding_matrix = self._create_embedding_matrix()
@@ -47,12 +47,15 @@ class EmbeddingSimilaritySearch:
             self.embedding_matrix.shape[1] if len(self.embedding_matrix) > 0 else 0
         )
 
-    def _validate_code_units(self, enforce_valid: bool = True):
+    def _validate_code_units(self, enforce_valid: bool = True) -> List[CodeUnit]:
         """
         Validate that all code units have valid embeddings.
 
         Args:
             enforce_valid: Whether to raise an error for invalid embeddings
+
+        Returns:
+            List of code units with valid embeddings
 
         Raises:
             ValueError: If no valid code units are provided or if embeddings are invalid
@@ -73,6 +76,15 @@ class EmbeddingSimilaritySearch:
         if not all(len(unit.embedding) == first_dim for unit in valid_units):
             raise ValueError("All embeddings must have the same dimensionality")
 
+        # Verify that all embeddings were generated with the same model.
+        if not all(
+            unit.embedding.model_name == valid_units[0].embedding.model_name
+            for unit in valid_units
+        ):
+            raise ValueError("All embeddings must be generated with the same model")
+
+        return valid_units
+
     def _create_embedding_matrix(self) -> np.ndarray:
         """
         Create a normalized matrix of all embeddings for efficient similarity computation.
@@ -84,8 +96,8 @@ class EmbeddingSimilaritySearch:
         embeddings = []
         self.unit_ids = []
 
-        for unit in self.codebase.iter_flat():
-            embeddings.append(unit.embedding)
+        for unit in self.valid_units:
+            embeddings.append(unit.embedding.vector)
             self.unit_ids.append(unit.id)
 
         embedding_matrix = np.array(embeddings)
@@ -98,7 +110,7 @@ class EmbeddingSimilaritySearch:
 
     def find_similar(
         self,
-        query_vector: np.ndarray,
+        query_embedding: CodeEmbedding,
         top_k: int = 5,
         threshold: Optional[float] = None,
     ) -> List[SearchResult]:
@@ -106,29 +118,29 @@ class EmbeddingSimilaritySearch:
         Find the most similar code units to a query vector using cosine similarity.
 
         Args:
-            query_vector: The query embedding to compare against
+            query_embedding: The query embedding to compare against
             top_k: Maximum number of results to return
             threshold: Optional similarity threshold (0 to 1) to filter results
 
         Returns:
             List of SearchResult objects containing matched code units and scores
         """
-        # Validate query vector
-        if not isinstance(query_vector, (np.ndarray, list)):
-            raise ValueError("Query vector must be a numpy array or list")
-        query_vector = np.array(query_vector)
-
-        if query_vector.shape != (self.embedding_dim,):
+        if query_embedding.vector.shape != (self.embedding_dim,):
             raise ValueError(
-                f"Query vector dimension {query_vector.shape} does not match "
+                f"Query vector dimension {query_embedding.vector.shape} does not match "
                 f"embedding dimension {self.embedding_dim}"
             )
 
+        if query_embedding.model_name != self.valid_units[0].embedding.model_name:
+            raise ValueError(
+                "Query vector was generated with a different model than the code units"
+            )
+
         # Normalize query vector
-        query_norm = np.linalg.norm(query_vector)
+        query_norm = np.linalg.norm(query_embedding.vector)
         if query_norm == 0:
             raise ValueError("Query vector cannot be zero")
-        normalized_query = query_vector / query_norm
+        normalized_query = query_embedding.vector / query_norm
 
         # Compute cosine similarities with all embeddings
         similarities = np.dot(self.embedding_matrix, normalized_query)
@@ -250,7 +262,7 @@ def compare(
     # Generate query embedding
     print(f"Query: {query}")
     embedder = CodeEmbedder()
-    query_vector = embedder.generate_embedding(query)
+    query_vector = embedder.model.generate_embedding(query)
 
     # Compare all code units
     print("Generating similarity scores...")
