@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import random
 from abc import ABC, abstractmethod
@@ -19,6 +20,12 @@ from evaluation.data_generators.prompt_code_pair_dataset import (
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s: %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class BaseGeneratorConfig:
     """Base configuration for prompt generation."""
@@ -34,6 +41,7 @@ class BaseGeneratorConfig:
     would be a natural solution to it.
     """
 
+
 @dataclass
 class OpenAIConfig(BaseGeneratorConfig):
     """Configuration specific to OpenAI models."""
@@ -41,28 +49,36 @@ class OpenAIConfig(BaseGeneratorConfig):
     model: str = "gpt-4"
 
 
-@dataclass
 class AbstractPromptGenerator(ABC):
     """Abstract base class for prompt-code pair generators."""
 
-    codebase: CodebaseSnapshot
-    output_path: Path = Path(
-        os.path.expanduser("~/code_assist/datasets/synthetic/prompt_code_pairs.json")
-    )
-    num_rows: Optional[int] = None
-    unit_types: List[str] = field(
-        default_factory=lambda: ["function", "method", "class"]
-    )
+    def __init__(
+            self,
+            codebase: CodebaseSnapshot,
+            output_path: Path = Path(
+                os.path.expanduser(
+                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+                )
+            ),
+            num_rows: Optional[int] = None,
+            unit_types: List[str] = None
+    ):
+        """
+        Initialize the prompt generator.
 
-    def __post_init__(self):
-        """Ensure output directory exists and initialize the model."""
+        Args:
+            codebase: Snapshot of the codebase to generate prompts for
+            output_path: Path to save the generated dataset
+            num_rows: Optional limit on number of rows to generate
+            unit_types: Types of code units to process (defaults to function, method, class)
+        """
+        self.codebase = codebase
+        self.output_path = output_path
+        self.num_rows = num_rows
+        self.unit_types = unit_types or ["function", "method", "class"]
+
+        # Ensure output directory exists
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize_model()
-
-    @abstractmethod
-    def _initialize_model(self) -> None:
-        """Initialize the specific model client/configuration."""
-        pass
 
     @abstractmethod
     async def _generate_prompt(self, code_unit: CodeUnit) -> str:
@@ -96,7 +112,7 @@ class AbstractPromptGenerator(ABC):
                 )
                 dataset.add_pair(pair)
             except Exception as e:
-                print(f"Error generating prompt for {code_unit.name}: {str(e)}")
+                logging.info(f"Error generating prompt for {code_unit.name}: {str(e)}")
                 continue
 
         return dataset
@@ -109,15 +125,32 @@ class AbstractPromptGenerator(ABC):
         return dataset
 
 
-@dataclass
 class OpenAIGenerator(AbstractPromptGenerator):
     """Prompt generator using OpenAI models."""
 
-    config: OpenAIConfig = field(default_factory=OpenAIConfig)
-    _client: Optional[AsyncOpenAI] = field(default=None, init=False)
+    def __init__(
+            self,
+            codebase: CodebaseSnapshot,
+            config: OpenAIConfig = None,
+            output_path: Path = Path(
+                os.path.expanduser(
+                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+                )
+            ),
+            num_rows: Optional[int] = None,
+            unit_types: List[str] = None
+    ):
+        """Initialize the OpenAI prompt generator.
 
-    def _initialize_model(self) -> None:
-        """Initialize the OpenAI client."""
+        Args:
+            codebase: Snapshot of the codebase to generate prompts for
+            config: OpenAI configuration (defaults to default OpenAIConfig)
+            output_path: Path to save the generated dataset
+            num_rows: Optional limit on number of rows to generate
+            unit_types: Types of code units to process
+        """
+        super().__init__(codebase, output_path, num_rows, unit_types)
+        self.config = config or OpenAIConfig()
         self._client = AsyncOpenAI()
 
     async def _generate_prompt(self, code_unit: CodeUnit) -> str:
