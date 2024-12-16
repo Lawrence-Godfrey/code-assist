@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 
 from storage.code_store import CodebaseSnapshot, CodeUnit
-from tests.data_generators.prompt_code_pair_dataset import (
+from evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePair,
     PromptCodePairDataset
 )
