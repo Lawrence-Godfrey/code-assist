@@ -4,20 +4,11 @@ from pathlib import Path
 import fire
 from typing import Optional
 
-from embedding.models.models import TransformersEmbeddingModel, OpenAIEmbeddingModel
+from embedding.models.models import EmbeddingModelFactory
 from storage.code_store import CodebaseSnapshot, Class, CodeEmbedding
 
 
 class CodeEmbedder:
-
-    MODEL_REGISTRY = {
-        "microsoft/codebert-base": TransformersEmbeddingModel,
-        "jinaai/jina-embeddings-v2-base-code": TransformersEmbeddingModel,
-        "jinaai/jina-embeddings-v3": TransformersEmbeddingModel,
-        "text-embedding-3-small": OpenAIEmbeddingModel,
-        "text-embedding-3-large": OpenAIEmbeddingModel,
-        "text-embedding-ada-002": OpenAIEmbeddingModel,
-    }
 
     def __init__(
         self, embedding_model: str = "microsoft/codebert-base", max_length: int = 512
@@ -30,20 +21,7 @@ class CodeEmbedder:
             max_length (int): Maximum token length for input sequences (not
                 applicable to OpenAIEmbeddingModel)
         """
-        if embedding_model not in self.MODEL_REGISTRY:
-            raise ValueError(
-                f"Unsupported model: {embedding_model}. "
-                f"Supported models are: {list(self.MODEL_REGISTRY.keys())}"
-            )
-
-        # Initialize the appropriate model implementation
-        model_class = self.MODEL_REGISTRY[embedding_model]
-
-        if model_class.__name__ == "TransformersEmbeddingModel":
-            self.model = model_class(embedding_model, max_length)
-        elif model_class.__name__ == "OpenAIEmbeddingModel":
-            self.model = model_class(embedding_model)
-
+        self.model =  EmbeddingModelFactory.create(embedding_model, max_length)
         self.embedding_dimension = self.model.embedding_dimension
 
     def embed_code_units(

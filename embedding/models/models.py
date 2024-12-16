@@ -1,14 +1,57 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import numpy as np
-import torch
 from dotenv import load_dotenv
-from openai import OpenAI
-from transformers import AutoTokenizer, AutoModel
 
 load_dotenv()
 
-class BaseEmbeddingModel(ABC):
+class EmbeddingModelFactory:
+    """Factory class for creating embedding models."""
+
+    MODEL_REGISTRY = {
+        "microsoft/codebert-base": "TransformersEmbeddingModel",
+        "jinaai/jina-embeddings-v2-base-code": "TransformersEmbeddingModel",
+        "jinaai/jina-embeddings-v3": "TransformersEmbeddingModel",
+        "text-embedding-3-small": "OpenAIEmbeddingModel",
+        "text-embedding-3-large": "OpenAIEmbeddingModel",
+        "text-embedding-ada-002": "OpenAIEmbeddingModel",
+    }
+
+    @classmethod
+    def create(cls, embedding_model: str, max_length: Optional[int] = 512) -> "EmbeddingModel":
+        """
+        Create and return an appropriate embedding model instance.
+
+        Args:
+            embedding_model: Name of the embedding model to create
+            max_length: Maximum token length for input sequences
+                       (only applicable to TransformersEmbeddingModel)
+
+        Returns:
+            An instance of EmbeddingModel
+
+        Raises:
+            ValueError: If the specified model is not supported
+        """
+        if embedding_model not in cls.MODEL_REGISTRY:
+            raise ValueError(
+                f"Unsupported model: {embedding_model}. "
+                f"Supported models are: {list(cls.MODEL_REGISTRY.keys())}"
+            )
+
+        model_type = cls.MODEL_REGISTRY[embedding_model]
+
+        # Return the appropriate model class
+        if model_type == "TransformersEmbeddingModel":
+            return TransformersEmbeddingModel(embedding_model, max_length)
+        elif model_type == "OpenAIEmbeddingModel":
+            return OpenAIEmbeddingModel(embedding_model)
+
+        raise ValueError(f"Unknown model type: {model_type}")
+
+
+class EmbeddingModel(ABC):
     """Abstract base class for embedding models."""
 
     model_name: str
@@ -25,7 +68,7 @@ class BaseEmbeddingModel(ABC):
         pass
 
 
-class TransformersEmbeddingModel(BaseEmbeddingModel):
+class TransformersEmbeddingModel(EmbeddingModel):
     """Implementation for Hugging Face Transformers-based embedding models."""
 
     def __init__(self, model_name: str, max_length: int = 512):
@@ -36,6 +79,12 @@ class TransformersEmbeddingModel(BaseEmbeddingModel):
             model_name: Name of the Hugging Face model
             max_length: Maximum token length for input sequences
         """
+        import torch
+        from transformers import AutoTokenizer, AutoModel
+
+        # Store torch module as instance variable to maintain access
+        self._torch = torch
+
         self.model_name = model_name
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -59,7 +108,7 @@ class TransformersEmbeddingModel(BaseEmbeddingModel):
             ).to(self.device)
 
             # Generate embeddings
-            with torch.no_grad():
+            with self._torch.no_grad():
                 outputs = self.model(**inputs)
                 # Use mean pooling over the last hidden state
                 embeddings = outputs.last_hidden_state.mean(dim=1)
@@ -78,7 +127,7 @@ class TransformersEmbeddingModel(BaseEmbeddingModel):
         return self.model.config.hidden_size
 
 
-class OpenAIEmbeddingModel(BaseEmbeddingModel):
+class OpenAIEmbeddingModel(EmbeddingModel):
     """Implementation for OpenAI API-based embedding models."""
 
     # We hardcode the model-embedding-size pairs here instead of sending an
@@ -96,6 +145,8 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
         Args:
             model_name: Name of the OpenAI embedding model
         """
+        from openai import OpenAI
+
         self.model_name = model_name
         self._embedding_dimension = self.MODELS[model_name]
         self.client = OpenAI()
