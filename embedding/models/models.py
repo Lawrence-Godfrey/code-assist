@@ -2,9 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 import numpy as np
-from dotenv import load_dotenv
 
-load_dotenv()
 
 class EmbeddingModelFactory:
     """Factory class for creating embedding models."""
@@ -19,7 +17,12 @@ class EmbeddingModelFactory:
     }
 
     @classmethod
-    def create(cls, embedding_model: str, max_length: Optional[int] = 512) -> "EmbeddingModel":
+    def create(
+        cls,
+        embedding_model: str,
+        max_length: Optional[int] = 512,
+        openai_api_key: Optional[str] = None,
+    ) -> "EmbeddingModel":
         """
         Create and return an appropriate embedding model instance.
 
@@ -27,12 +30,14 @@ class EmbeddingModelFactory:
             embedding_model: Name of the embedding model to create
             max_length: Maximum token length for input sequences
                        (only applicable to TransformersEmbeddingModel)
+            openai_api_key: OpenAI API key (required for OpenAI models)
 
         Returns:
             An instance of EmbeddingModel
 
         Raises:
-            ValueError: If the specified model is not supported
+            ValueError: If the specified model is not supported or if OpenAI API
+                key is missing for OpenAI models
         """
         if embedding_model not in cls.MODEL_REGISTRY:
             raise ValueError(
@@ -46,7 +51,11 @@ class EmbeddingModelFactory:
         if model_type == "TransformersEmbeddingModel":
             return TransformersEmbeddingModel(embedding_model, max_length)
         elif model_type == "OpenAIEmbeddingModel":
-            return OpenAIEmbeddingModel(embedding_model)
+            if openai_api_key is None:
+                raise ValueError(
+                    "OpenAI API key is required for OpenAI embedding models."
+                )
+            return OpenAIEmbeddingModel(embedding_model, openai_api_key)
 
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -138,18 +147,19 @@ class OpenAIEmbeddingModel(EmbeddingModel):
         "text-embedding-ada-002": 1536
     }
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, api_key: str):
         """
         Initialize the OpenAI embedding model.
 
         Args:
             model_name: Name of the OpenAI embedding model
+            api_key: OpenAI API key
         """
         from openai import OpenAI
 
         self.model_name = model_name
         self._embedding_dimension = self.MODELS[model_name]
-        self.client = OpenAI()
+        self.client = OpenAI(api_key=api_key)
 
     def generate_embedding(self, text: str) -> np.ndarray:
         """Generate an embedding vector for the given text."""

@@ -1,8 +1,9 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 import fire
-from typing import Optional
+from dotenv import load_dotenv
 
 from embedding.models.models import EmbeddingModelFactory
 from storage.code_store import CodebaseSnapshot, Class, CodeEmbedding
@@ -11,7 +12,10 @@ from storage.code_store import CodebaseSnapshot, Class, CodeEmbedding
 class CodeEmbedder:
 
     def __init__(
-        self, embedding_model: str = "microsoft/codebert-base", max_length: int = 512
+        self,
+        embedding_model: str = "microsoft/codebert-base",
+        max_length: int = 512,
+        openai_api_key: Optional[str] = None,
     ):
         """
         Initialize code embedder which generates embeddings for code units and queries.
@@ -20,8 +24,14 @@ class CodeEmbedder:
             embedding_model (str): Hugging Face model for generating embeddings
             max_length (int): Maximum token length for input sequences (not
                 applicable to OpenAIEmbeddingModel)
+            openai_api_key (str, optional): OpenAI API key. Required for OpenAI
+                models.
         """
-        self.model =  EmbeddingModelFactory.create(embedding_model, max_length)
+        self.model =  EmbeddingModelFactory.create(
+            embedding_model,
+            max_length,
+            openai_api_key=openai_api_key,
+        )
         self.embedding_dimension = self.model.embedding_dimension
 
     def embed_code_units(
@@ -105,8 +115,21 @@ def process_embeddings(
     print(f"Loading code units from {input_path}")
     codebase = CodebaseSnapshot.from_json(Path(input_path))
 
+    # Get OpenAI API key if needed
+    openai_api_key = None
+    if EmbeddingModelFactory.MODEL_REGISTRY.get(model_name) == "OpenAIEmbeddingModel":
+        load_dotenv()
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError(
+                "OPENAI_API_KEY environment variable is required for OpenAI models"
+            )
+
     # Initialize embedder
-    embedder = CodeEmbedder(embedding_model=model_name)
+    embedder = CodeEmbedder(
+        embedding_model=model_name,
+        openai_api_key=openai_api_key
+    )
 
     # Generate embeddings
     print("Generating embeddings...")
