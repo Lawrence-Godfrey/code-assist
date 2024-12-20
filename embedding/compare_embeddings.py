@@ -262,11 +262,11 @@ def compare(
     # Generate query embedding
     print(f"Query: {query}")
     embedder = CodeEmbedder()
-    query_vector = embedder.model.generate_embedding(query)
+    query_embedding = embedder.model.generate_embedding(query)
 
     # Compare all code units
     print("Generating similarity scores...")
-    results = searcher.find_similar(query_vector)
+    results = searcher.find_similar(query_embedding)
 
     for result in results:
         print(

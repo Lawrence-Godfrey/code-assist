@@ -3,6 +3,8 @@ from typing import Optional
 
 import numpy as np
 
+from storage.code_store import CodeEmbedding
+
 
 class EmbeddingModelFactory:
     """Factory class for creating embedding models."""
@@ -66,7 +68,7 @@ class EmbeddingModel(ABC):
     model_name: str
 
     @abstractmethod
-    def generate_embedding(self, text: str) -> np.ndarray:
+    def generate_embedding(self, text: str) -> CodeEmbedding:
         """Generate an embedding vector for the given text."""
         pass
 
@@ -104,7 +106,7 @@ class TransformersEmbeddingModel(EmbeddingModel):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self.model.to(self.device)
 
-    def generate_embedding(self, text: str) -> np.ndarray:
+    def generate_embedding(self, text: str) -> CodeEmbedding:
         """Generate an embedding vector for the given text."""
         try:
             # Tokenize the input
@@ -124,7 +126,7 @@ class TransformersEmbeddingModel(EmbeddingModel):
 
             # Normalize embedding to unit length
             embedding = embeddings.cpu().numpy().flatten()
-            return embedding / np.linalg.norm(embedding)
+            return CodeEmbedding(embedding / np.linalg.norm(embedding), self.model_name)
 
         except Exception as e:
             print(f"Embedding generation error: {e}")
@@ -144,7 +146,7 @@ class OpenAIEmbeddingModel(EmbeddingModel):
     MODELS = {
         "text-embedding-3-small": 1536,
         "text-embedding-3-large": 3072,
-        "text-embedding-ada-002": 1536
+        "text-embedding-ada-002": 1536,
     }
 
     def __init__(self, model_name: str, api_key: str):
@@ -161,20 +163,18 @@ class OpenAIEmbeddingModel(EmbeddingModel):
         self._embedding_dimension = self.MODELS[model_name]
         self.client = OpenAI(api_key=api_key)
 
-    def generate_embedding(self, text: str) -> np.ndarray:
+    def generate_embedding(self, text: str) -> CodeEmbedding:
         """Generate an embedding vector for the given text."""
         try:
             response = self.client.embeddings.create(
-                model=self.model_name,
-                input=text,
-                encoding_format="float"
+                model=self.model_name, input=text, encoding_format="float"
             )
 
             # Extract the embedding vector from the response
             embedding = np.array(response.data[0].embedding)
 
             # OpenAI embeddings are already normalized, but for consistency...
-            return embedding / np.linalg.norm(embedding)
+            return CodeEmbedding(embedding / np.linalg.norm(embedding), self.model_name)
 
         except Exception as e:
             print(f"OpenAI embedding generation error: {e}")

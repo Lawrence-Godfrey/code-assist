@@ -13,7 +13,7 @@ class CodeEmbedder:
 
     def __init__(
         self,
-        embedding_model: str = "microsoft/codebert-base",
+        embedding_model: str = "jinaai/jina-embeddings-v3",
         max_length: int = 512,
         openai_api_key: Optional[str] = None,
     ):
@@ -27,7 +27,7 @@ class CodeEmbedder:
             openai_api_key (str, optional): OpenAI API key. Required for OpenAI
                 models.
         """
-        self.model =  EmbeddingModelFactory.create(
+        self.model = EmbeddingModelFactory.create(
             embedding_model,
             max_length,
             openai_api_key=openai_api_key,
@@ -57,10 +57,7 @@ class CodeEmbedder:
                         f"filepath: {unit.file.filepath}, "
                         f"source_code: {unit.source_code}"
                     )
-                    unit.embedding = CodeEmbedding(
-                        vector=self.model.generate_embedding(formatted_string),
-                        model_name=self.model.model_name,
-                    )
+                    unit.embedding = self.model.generate_embedding(formatted_string)
 
                     if isinstance(unit, Class):
                         for method in unit.methods:
@@ -71,9 +68,8 @@ class CodeEmbedder:
                                 f"name: {method.name}, "
                                 f"source_code: {method.source_code}"
                             )
-                            method.embedding = CodeEmbedding(
-                                vector=self.model.generate_embedding(formatted_string),
-                                model_name=self.model.model_name,
+                            method.embedding = self.model.generate_embedding(
+                                formatted_string
                             )
 
                 except Exception as e:
@@ -85,7 +81,7 @@ class CodeEmbedder:
 def process_embeddings(
     input_path: str = "code_units.json",
     output_path: Optional[str] = None,
-    model_name: str = "microsoft/codebert-base",
+    model_name: str = "jinaai/jina-embeddings-v3",
 ) -> None:
     """
     Generate embeddings for code units from a JSON file.
@@ -126,10 +122,7 @@ def process_embeddings(
             )
 
     # Initialize embedder
-    embedder = CodeEmbedder(
-        embedding_model=model_name,
-        openai_api_key=openai_api_key
-    )
+    embedder = CodeEmbedder(embedding_model=model_name, openai_api_key=openai_api_key)
 
     # Generate embeddings
     print("Generating embeddings...")
