@@ -9,12 +9,18 @@ from embedding.generate_embeddings import CodeEmbedder
 from embedding.compare_embeddings import EmbeddingSimilaritySearch
 from storage.code_store import CodebaseSnapshot
 from evaluation.data_generators.prompt_code_pair_dataset import PromptCodePairDataset
+from embedding.models.models import (
+    EmbeddingModelFactory,
+    EmbeddingModel,
+    OpenAIEmbeddingModel,
+)
 
 
 @dataclass
 class RetrievalMetrics:
     """Stores various retrieval evaluation metrics."""
 
+    model_name: str
     mrr: float
     precision_at_k: Dict[int, float]
     recall_at_k: Dict[int, float]
@@ -22,6 +28,19 @@ class RetrievalMetrics:
     mean_avg_precision: float
     mean_similarity_correct: float
     mean_similarity_incorrect: float
+
+    def to_dict(self) -> dict:
+        """Convert metrics to a dictionary format."""
+        return {
+            "model_name": self.model_name,
+            "mrr": self.mrr,
+            "precision_at_k": self.precision_at_k,
+            "recall_at_k": self.recall_at_k,
+            "hits_at_k": self.hits_at_k,
+            "mean_average_precision": self.mean_avg_precision,
+            "mean_similarity_correct": self.mean_similarity_correct,
+            "mean_similarity_incorrect": self.mean_similarity_incorrect,
+        }
 
 
 class CodeRetrievalEvaluator:
@@ -31,7 +50,7 @@ class CodeRetrievalEvaluator:
         self,
         embedder: CodeEmbedder,
         test_dataset: PromptCodePairDataset,
-        codebase: CodebaseSnapshot,
+        similarity_engine: EmbeddingSimilaritySearch,
         k_values: List[int] = None,
     ):
         """
@@ -40,12 +59,12 @@ class CodeRetrievalEvaluator:
         Args:
             embedder: Initialized CodeEmbedder instance
             test_dataset: Dataset of prompt-code pairs for testing
-            codebase: Full codebase with embedded code units
+            similarity_engine: Initialized EmbeddingSimilaritySearch instance
             k_values: List of K values for computing metrics (default: [1, 3, 5, 10])
         """
         self.embedder = embedder
         self.test_dataset = test_dataset
-        self.searcher = EmbeddingSimilaritySearch(codebase)
+        self.searcher = similarity_engine
         self.k_values = k_values or [1, 3, 5, 10]
         self.max_k = max(self.k_values)
 
@@ -138,6 +157,7 @@ class CodeRetrievalEvaluator:
 
         # Aggregate metrics
         metrics = RetrievalMetrics(
+            model_name=self.embedder.model.model_name,
             mrr=self._compute_mrr(ranks),
             precision_at_k={
                 k: float(np.mean(precisions))
@@ -156,59 +176,146 @@ class CodeRetrievalEvaluator:
         return metrics
 
 
+class MultiModelCodeRetrievalEvaluator:
+    """Evaluates code retrieval performance across multiple embedding models."""
+
+    def __init__(
+        self,
+        test_dataset: PromptCodePairDataset,
+        codebase: CodebaseSnapshot,
+        models: List[EmbeddingModel],
+        k_values: List[int] = None,
+    ):
+        """
+        Initialize the multi-model evaluator.
+
+        Args:
+            test_dataset: Dataset of prompt-code pairs for testing
+            codebase: Full codebase with embedded code units
+            models: List of embedding models to evaluate
+            k_values: List of K values for computing metrics
+        """
+        self.test_dataset = test_dataset
+        self.codebase = codebase
+        self.k_values = k_values
+        self.models = models
+
+    def evaluate_all_models(self) -> List[RetrievalMetrics]:
+        """
+        Evaluate retrieval performance using all available embedding models.
+
+        Returns:
+            List of RetrievalMetrics, one for each model
+        """
+        metrics_list = []
+
+        for model in self.models:
+            try:
+
+                print(f"\nEvaluating model: {model.model_name}")
+
+                # Initialize embedder for current model
+                embedder = CodeEmbedder(embedding_model=model)
+
+                similarity_engine = EmbeddingSimilaritySearch(
+                    codebase=self.codebase, embedding_model=model
+                )
+
+                # Create and run evaluator for current model
+                evaluator = CodeRetrievalEvaluator(
+                    embedder=embedder,
+                    test_dataset=self.test_dataset,
+                    similarity_engine=similarity_engine,
+                    k_values=self.k_values,
+                )
+
+                metrics = evaluator.evaluate()
+                metrics_list.append(metrics)
+
+            except Exception as e:
+                print(f"Error evaluating {model.model_name}: {str(e)}")
+                continue
+
+        return metrics_list
+
+    def print_comparison(self, metrics_list: List[RetrievalMetrics]) -> None:
+        """Print a comparison of metrics across all models."""
+        print("\nModel Comparison Results:")
+        print("=" * 80)
+
+        # Print MRR comparison
+        print("\nMean Reciprocal Rank:")
+        for metrics in metrics_list:
+            print(f"{metrics.model_name}: {metrics.mrr:.3f}")
+
+        # Print Precision@K comparison
+        print("\nPrecision@K:")
+        k_values = list(metrics_list[0].precision_at_k.keys())
+        for k in k_values:
+            print(f"\nP@{k}:")
+            for metrics in metrics_list:
+                print(f"{metrics.model_name}: {metrics.precision_at_k[k]:.3f}")
+
+        # Print Mean Average Precision comparison
+        print("\nMean Average Precision:")
+        for metrics in metrics_list:
+            print(f"{metrics.model_name}: {metrics.mean_avg_precision:.3f}")
+
+        # Print similarity score analysis
+        print("\nSimilarity Score Analysis:")
+        for metrics in metrics_list:
+            print(f"\n{metrics.model_name}:")
+            print(f"  Correct matches: {metrics.mean_similarity_correct:.3f}")
+            print(f"  Incorrect matches: {metrics.mean_similarity_incorrect:.3f}")
+
+
 def main(
     test_data_path: str,
     codebase_path: str,
-    embedding_model: str = "jinaai/jina-embeddings-v3",
     output_path: Optional[str] = None,
+    openai_api_key: Optional[str] = None,
 ) -> None:
     """
-    Run evaluation and save results.
+    Run evaluation across all models and save results.
 
     Args:
         test_data_path: Path to test dataset JSON
         codebase_path: Path to embedded codebase JSON
-        embedding_model: Name of embedding model to use
         output_path: Optional path to save evaluation results
+        openai_api_key: Optional OpenAI API key for OpenAI models
     """
     # Load test dataset and codebase
     test_dataset = PromptCodePairDataset.from_json(
         Path(test_data_path), CodebaseSnapshot.from_json(Path(codebase_path))
     )
-
     codebase = CodebaseSnapshot.from_json(Path(codebase_path))
 
-    # Initialize embedder and evaluator
-    embedder = CodeEmbedder(embedding_model=embedding_model)
-    evaluator = CodeRetrievalEvaluator(embedder, test_dataset, codebase)
+    models = []
+    model_classes = EmbeddingModelFactory.models()
+    for model_name, cls in model_classes.items():
+        if issubclass(cls, OpenAIEmbeddingModel):
+            model = cls(model_name=model_name, api_key=openai_api_key)
+            models.append(model)
+        else:
+            model = cls(model_name=model_name)
+            models.append(model)
 
-    # Run evaluation
-    metrics = evaluator.evaluate()
+    # Initialize multi-model evaluator
+    evaluator = MultiModelCodeRetrievalEvaluator(
+        test_dataset=test_dataset, codebase=codebase, models=models
+    )
 
-    # Print results
-    print("\nEvaluation Results:")
-    print(f"Mean Reciprocal Rank: {metrics.mrr:.3f}")
-    print("\nPrecision@K:")
-    for k, value in metrics.precision_at_k.items():
-        print(f"  P@{k}: {value:.3f}")
-    print("\nHits@K:")
-    for k, value in metrics.hits_at_k.items():
-        print(f"  H@{k}: {value:.3f}")
-    print(f"\nMean Average Precision: {metrics.mean_avg_precision:.3f}")
-    print("\nSimilarity Analysis:")
-    print(f"  Mean Similarity (Correct): {metrics.mean_similarity_correct:.3f}")
-    print(f"  Mean Similarity (Incorrect): {metrics.mean_similarity_incorrect:.3f}")
+    # Run evaluation for all models
+    metrics_list = evaluator.evaluate_all_models()
+
+    # Print comparison
+    evaluator.print_comparison(metrics_list)
 
     # Save results if output path provided
     if output_path:
         results = {
-            "mrr": metrics.mrr,
-            "precision_at_k": metrics.precision_at_k,
-            "recall_at_k": metrics.recall_at_k,
-            "hits_at_k": metrics.hits_at_k,
-            "mean_average_precision": metrics.mean_avg_precision,
-            "mean_similarity_correct": metrics.mean_similarity_correct,
-            "mean_similarity_incorrect": metrics.mean_similarity_incorrect,
+            "metrics": [metrics.to_dict() for metrics in metrics_list],
+            "evaluated_at": str(Path(output_path).resolve()),
         }
 
         with open(output_path, "w") as f:

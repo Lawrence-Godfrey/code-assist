@@ -1,65 +1,86 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Callable, Type, TypeVar, Dict, Any, Optional, List
 
 import numpy as np
 
 from storage.code_store import CodeEmbedding
 
 
+T = TypeVar("T", bound="EmbeddingModel")
+
+
 class EmbeddingModelFactory:
     """Factory class for creating embedding models."""
 
-    MODEL_REGISTRY = {
-        "microsoft/codebert-base": "TransformersEmbeddingModel",
-        "jinaai/jina-embeddings-v2-base-code": "TransformersEmbeddingModel",
-        "jinaai/jina-embeddings-v3": "TransformersEmbeddingModel",
-        "text-embedding-3-small": "OpenAIEmbeddingModel",
-        "text-embedding-3-large": "OpenAIEmbeddingModel",
-        "text-embedding-ada-002": "OpenAIEmbeddingModel",
-    }
+    _models: Dict[str, Type[T]] = {}
 
     @classmethod
-    def create(
-        cls,
-        embedding_model: str,
-        max_length: Optional[int] = 512,
-        openai_api_key: Optional[str] = None,
-    ) -> "EmbeddingModel":
+    def register(cls, *names: str) -> Callable[[Type[T]], Type[T]]:
+        """
+        Decorator to register a model class with its supported model names.
+
+        Args:
+            *names: Variable number of model names that this class supports
+
+        Returns:
+            Decorator function that registers the model class
+        """
+
+        def decorator(model_class: Type[T]) -> Type[T]:
+            for name in names:
+                cls._models[name] = model_class
+            return model_class
+
+        return decorator
+
+    @classmethod
+    def model(cls, model_name: str) -> Optional[Type[T]]:
+        """
+        Get the registered model class for a given model name.
+
+        Args:
+            model_name: Name of the model to look up
+
+        Returns:
+            The model class if registered, None otherwise
+        """
+        return cls._models.get(model_name)
+
+    @classmethod
+    def create(cls, model_name: str, *args: Any, **kwargs: Any) -> T:
         """
         Create and return an appropriate embedding model instance.
 
         Args:
-            embedding_model: Name of the embedding model to create
-            max_length: Maximum token length for input sequences
-                       (only applicable to TransformersEmbeddingModel)
-            openai_api_key: OpenAI API key (required for OpenAI models)
+            model_name: Name of the model to create
+            *args: Variable length argument list to pass to the model constructor
+            **kwargs: Arbitrary keyword arguments to pass to the model constructor
 
         Returns:
             An instance of EmbeddingModel
 
         Raises:
-            ValueError: If the specified model is not supported or if OpenAI API
-                key is missing for OpenAI models
+            ValueError: If model_name is not provided or model is not supported
+
+        Example:
+            model = EmbeddingModelFactory.create(model_name="microsoft/codebert-base", max_length=512)
         """
-        if embedding_model not in cls.MODEL_REGISTRY:
+        if model_name not in cls._models:
             raise ValueError(
-                f"Unsupported model: {embedding_model}. "
-                f"Supported models are: {list(cls.MODEL_REGISTRY.keys())}"
+                f"Unsupported model: {model_name}. "
+                f"Supported models are: {list(cls._models.keys())}"
             )
+        return cls._models[model_name](*args, **kwargs)
 
-        model_type = cls.MODEL_REGISTRY[embedding_model]
+    @classmethod
+    def list_models(cls) -> list[str]:
+        """Get a list of all registered model names."""
+        return list(cls._models.keys())
 
-        # Return the appropriate model class
-        if model_type == "TransformersEmbeddingModel":
-            return TransformersEmbeddingModel(embedding_model, max_length)
-        elif model_type == "OpenAIEmbeddingModel":
-            if openai_api_key is None:
-                raise ValueError(
-                    "OpenAI API key is required for OpenAI embedding models."
-                )
-            return OpenAIEmbeddingModel(embedding_model, openai_api_key)
-
-        raise ValueError(f"Unknown model type: {model_type}")
+    @classmethod
+    def models(cls) -> Dict[str, Type[T]]:
+        """Get a list of all registered model classes."""
+        return cls._models
 
 
 class EmbeddingModel(ABC):
@@ -79,6 +100,11 @@ class EmbeddingModel(ABC):
         pass
 
 
+@EmbeddingModelFactory.register(
+    "microsoft/codebert-base",
+    "jinaai/jina-embeddings-v2-base-code",
+    "jinaai/jina-embeddings-v3",
+)
 class TransformersEmbeddingModel(EmbeddingModel):
     """Implementation for Hugging Face Transformers-based embedding models."""
 
@@ -138,6 +164,11 @@ class TransformersEmbeddingModel(EmbeddingModel):
         return self.model.config.hidden_size
 
 
+@EmbeddingModelFactory.register(
+    "text-embedding-3-small",
+    "text-embedding-3-large",
+    "text-embedding-ada-002",
+)
 class OpenAIEmbeddingModel(EmbeddingModel):
     """Implementation for OpenAI API-based embedding models."""
 

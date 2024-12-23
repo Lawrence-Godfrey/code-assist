@@ -43,6 +43,14 @@ class CodeEmbedding:
         """Get the length of the embedding vector."""
         return len(self.vector)
 
+    def __eq__(self, other):
+        if not isinstance(other, CodeEmbedding):
+            return False
+        return (
+            np.array_equal(self.vector, other.vector)
+            and self.model_name == other.model_name
+        )
+
     def to_dict(self) -> dict:
         """Convert the code embedding to a dictionary."""
         return {"vector": self.vector.tolist(), "model_name": self.model_name}
@@ -66,7 +74,7 @@ class CodeUnit(ABC):
     source_code: str
     docstring: Optional[str] = None
     unit_type: str = field(init=False)
-    embedding: Optional[CodeEmbedding] = None
+    embeddings: Optional[Dict[str, CodeEmbedding]] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def to_dict(self) -> dict:
@@ -79,8 +87,11 @@ class CodeUnit(ABC):
             "docstring": self.docstring,
         }
 
-        if self.embedding is not None:
-            output["embedding"] = self.embedding.to_dict()
+        if self.embeddings is not None:
+            output["embeddings"] = {
+                model_name: embedding.to_dict()
+                for model_name, embedding in self.embeddings.items()
+            }
 
         return output
 
@@ -171,11 +182,16 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
             docstring=data.get("docstring"),
             id=data["id"],
             filepath=Path(data["filepath"]),
-            embedding=CodeEmbedding.from_dict(data.get("embedding")),
+            embeddings={
+                embedding["model_name"]: CodeEmbedding.from_dict(embedding)
+                for embedding in data.get("embeddings", [])
+            },
         )
+
         for unit_data in code_units_data:
             unit = TopLevelCodeUnit.from_dict(unit_data)
             file.add_code_unit(unit)
+
         return file
 
     def add_code_unit(self, unit: TopLevelCodeUnit) -> None:
@@ -239,7 +255,10 @@ class Method(CodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embedding=CodeEmbedding.from_dict(data.get("embedding")),
+            embeddings={
+                embedding["model_name"]: CodeEmbedding.from_dict(embedding)
+                for embedding in data.get("embeddings", [])
+            },
         )
         return method
 
@@ -280,7 +299,10 @@ class Function(TopLevelCodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embedding=CodeEmbedding.from_dict(data.get("embedding")),
+            embeddings={
+                embedding["model_name"]: CodeEmbedding.from_dict(embedding)
+                for embedding in data.get("embeddings", [])
+            },
         )
         return function
 
@@ -327,7 +349,10 @@ class Class(TopLevelCodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embedding=CodeEmbedding.from_dict(data.get("embedding")),
+            embeddings={
+                embedding["model_name"]: CodeEmbedding.from_dict(embedding)
+                for embedding in data.get("embeddings", [])
+            },
         )
         for method_data in methods_data:
             method = Method.from_dict(method_data)

@@ -23,7 +23,6 @@ Requirements:
     - Pre-generated code embeddings in JSON format
 """
 
-import json
 import logging
 import os
 from pathlib import Path
@@ -34,7 +33,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from embedding.compare_embeddings import EmbeddingSimilaritySearch, SearchResult
 from embedding.generate_embeddings import CodeEmbedder
-from storage.code_store import CodebaseSnapshot, CodeEmbedding
+from embedding.models.models import EmbeddingModel, EmbeddingModelFactory
+from storage.code_store import CodebaseSnapshot
 
 load_dotenv()
 
@@ -48,8 +48,8 @@ class RAGEngine:
     def __init__(
         self,
         codebase: CodebaseSnapshot,
+        embedding_model: EmbeddingModel,
         prompt_model: Optional[str] = "gpt-4",
-        embedding_model: Optional[str] = "jinaai/jina-embeddings-v3",
         top_k: Optional[int] = 5,
         threshold: Optional[float] = None,
         logging_enabled: Optional[bool] = False,
@@ -80,7 +80,9 @@ class RAGEngine:
 
         # Initialize embedder and similarity searcher
         self._embedder = CodeEmbedder(embedding_model=embedding_model)
-        self._searcher = EmbeddingSimilaritySearch(codebase=codebase)
+        self._searcher = EmbeddingSimilaritySearch(
+            codebase=codebase, embedding_model=embedding_model
+        )
 
         # Initialise large LLM client. At this point, only OpenAI is available.
         if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
@@ -269,6 +271,7 @@ def main(
         )
 
     codebase = CodebaseSnapshot.from_json(Path(code_units_path))
+    embedding_model = EmbeddingModelFactory.create(embedding_model)
 
     engine = RAGEngine(
         codebase=codebase,
