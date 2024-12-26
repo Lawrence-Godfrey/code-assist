@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -47,3 +48,13 @@ class EvaluateCommands:
 
         metrics_list = evaluator.evaluate_all_models()
         evaluator.print_comparison(metrics_list)
+
+        # Save results if output path provided
+        if output_path:
+            results = {
+                "metrics": [metrics.to_dict() for metrics in metrics_list],
+                "evaluated_at": str(Path(output_path).resolve()),
+            }
+
+            with open(output_path, "w") as f:
+                json.dump(results, f, indent=2)

@@ -15,6 +15,7 @@ class GenerateCommands:
     def prompts(
         self,
         code_units_path: str,
+        openai_api_key: str,
         output_path: Optional[str] = None,
         num_rows: Optional[int] = None,
         unit_types: Optional[List[str]] = None,
@@ -31,6 +32,7 @@ class GenerateCommands:
 
         generator = OpenAIGenerator(
             codebase=codebase,
+            openai_api_key=openai_api_key,
             config=OpenAIConfig(temperature=temperature, max_tokens=max_tokens),
             output_path=Path(output_path),
             num_rows=num_rows,

@@ -24,7 +24,7 @@ dependencies = [
     "astor",
     "GitPython",
     "einops",
-    "numpy",
+    "numpy>=1.24.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
