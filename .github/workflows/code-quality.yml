@@ -2,9 +2,9 @@ name: Code Quality and Package Check
 
 on:
   push:
-    branches: [ main, feature/cicd ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   code-quality:
