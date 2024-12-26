@@ -14,11 +14,11 @@ class EmbedCommands:
     """Commands for generating and comparing embeddings."""
 
     def _process_embeddings(
-            self,
-            input_path: str = "code_units.json",
-            output_path: Optional[str] = None,
-            model_name: str = "jinaai/jina-embeddings-v3",
-            openai_api_key: Optional[str] = None,
+        self,
+        input_path: str = "code_units.json",
+        output_path: Optional[str] = None,
+        model_name: str = "jinaai/jina-embeddings-v3",
+        openai_api_key: Optional[str] = None,
     ) -> None:
         """
         Generate embeddings for code units from a JSON file.

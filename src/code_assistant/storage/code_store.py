@@ -85,7 +85,10 @@ class CodeUnit(ABC):
             "name": self.name,
             "source_code": self.source_code,
             "docstring": self.docstring,
-            "embeddings": {model_name: embedding.to_dict() for model_name, embedding in self.embeddings.items()},
+            "embeddings": {
+                model_name: embedding.to_dict()
+                for model_name, embedding in self.embeddings.items()
+            },
         }
 
         return output
@@ -177,7 +180,10 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
             docstring=data.get("docstring"),
             id=data["id"],
             filepath=Path(data["filepath"]),
-            embeddings={model_name: CodeEmbedding.from_dict(embedding_data) for model_name, embedding_data in data["embeddings"].items()},
+            embeddings={
+                model_name: CodeEmbedding.from_dict(embedding_data)
+                for model_name, embedding_data in data["embeddings"].items()
+            },
         )
 
         for unit_data in code_units_data:
@@ -247,7 +253,10 @@ class Method(CodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embeddings={model_name: CodeEmbedding.from_dict(embedding_data) for model_name, embedding_data in data["embeddings"].items()},
+            embeddings={
+                model_name: CodeEmbedding.from_dict(embedding_data)
+                for model_name, embedding_data in data["embeddings"].items()
+            },
         )
         return method
 
@@ -288,7 +297,10 @@ class Function(TopLevelCodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embeddings={model_name: CodeEmbedding.from_dict(embedding_data) for model_name, embedding_data in data["embeddings"].items()},
+            embeddings={
+                model_name: CodeEmbedding.from_dict(embedding_data)
+                for model_name, embedding_data in data["embeddings"].items()
+            },
         )
         return function
 
@@ -335,7 +347,10 @@ class Class(TopLevelCodeUnit):
             source_code=data["source_code"],
             docstring=data.get("docstring"),
             id=data["id"],
-            embeddings={model_name: CodeEmbedding.from_dict(embedding_data) for model_name, embedding_data in data["embeddings"].items()},
+            embeddings={
+                model_name: CodeEmbedding.from_dict(embedding_data)
+                for model_name, embedding_data in data["embeddings"].items()
+            },
         )
         for method_data in methods_data:
             method = Method.from_dict(method_data)

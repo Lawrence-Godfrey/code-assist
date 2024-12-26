@@ -51,15 +51,15 @@ class AbstractPromptGenerator(ABC):
     """Abstract base class for prompt-code pair generators."""
 
     def __init__(
-            self,
-            codebase: CodebaseSnapshot,
-            output_path: Path = Path(
-                os.path.expanduser(
-                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
-                )
-            ),
-            num_rows: Optional[int] = None,
-            unit_types: List[str] = None
+        self,
+        codebase: CodebaseSnapshot,
+        output_path: Path = Path(
+            os.path.expanduser(
+                "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+            )
+        ),
+        num_rows: Optional[int] = None,
+        unit_types: List[str] = None,
     ):
         """
         Initialize the prompt generator.
@@ -126,17 +126,17 @@ class OpenAIGenerator(AbstractPromptGenerator):
     """Prompt generator using OpenAI models."""
 
     def __init__(
-            self,
-            codebase: CodebaseSnapshot,
-            openai_api_key: str,
-            config: OpenAIConfig = None,
-            output_path: Path = Path(
-                os.path.expanduser(
-                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
-                )
-            ),
-            num_rows: Optional[int] = None,
-            unit_types: List[str] = None,
+        self,
+        codebase: CodebaseSnapshot,
+        openai_api_key: str,
+        config: OpenAIConfig = None,
+        output_path: Path = Path(
+            os.path.expanduser(
+                "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+            )
+        ),
+        num_rows: Optional[int] = None,
+        unit_types: List[str] = None,
     ):
         """Initialize the OpenAI prompt generator.
 
@@ -160,8 +160,8 @@ class OpenAIGenerator(AbstractPromptGenerator):
                 {"role": "system", "content": self.config.system_prompt},
                 {
                     "role": "user",
-                    "content": f"Generate a prompt for this code:\n\n{code_unit.source_code}"
-                }
+                    "content": f"Generate a prompt for this code:\n\n{code_unit.source_code}",
+                },
             ],
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
