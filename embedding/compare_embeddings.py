@@ -8,6 +8,7 @@ import numpy as np
 from typing import List, Optional
 
 from embedding.generate_embeddings import CodeEmbedder
+from embedding.models.models import EmbeddingModel, EmbeddingModelFactory
 from storage.code_store import CodebaseSnapshot, CodeUnit, CodeEmbedding
 
 
@@ -24,7 +25,7 @@ class SearchResult:
 
 
 class EmbeddingSimilaritySearch:
-    def __init__(self, codebase: CodebaseSnapshot):
+    def __init__(self, codebase: CodebaseSnapshot, embedding_model: EmbeddingModel):
         """
         Initialize the similarity search engine with code units and their embeddings.
         Each code unit should be a dictionary containing an 'embedding' key with
@@ -32,9 +33,11 @@ class EmbeddingSimilaritySearch:
 
         Args:
             codebase: CodebaseSnapshot object containing code units and their embeddings.
+            embedding_model: EmbeddingModel object used to generate the embeddings.
         """
 
         self.codebase = codebase
+        self.model = embedding_model
 
         # Validate code units and embeddings
         self.valid_units = self._validate_code_units()
@@ -63,25 +66,23 @@ class EmbeddingSimilaritySearch:
 
         valid_units = []
         for unit in self.codebase.iter_flat():
-            if unit.embedding is not None and len(unit.embedding) > 0:
+            if unit.embeddings is not None and self.model.model_name in unit.embeddings:
                 valid_units.append(unit)
             elif enforce_valid:
-                raise ValueError(f"Invalid embedding found in code unit: {unit.name}")
+                raise ValueError(
+                    f"Code unit {unit.id} does not have a valid embedding for the model {self.model.model_name}"
+                )
 
         if not valid_units:
             raise ValueError("No valid embeddings found in code units")
 
         # Verify all embeddings have the same dimensionality
-        first_dim = len(valid_units[0].embedding)
-        if not all(len(unit.embedding) == first_dim for unit in valid_units):
-            raise ValueError("All embeddings must have the same dimensionality")
-
-        # Verify that all embeddings were generated with the same model.
+        first_dim = len(valid_units[0].embeddings[self.model.model_name])
         if not all(
-            unit.embedding.model_name == valid_units[0].embedding.model_name
+            len(unit.embeddings[self.model.model_name]) == first_dim
             for unit in valid_units
         ):
-            raise ValueError("All embeddings must be generated with the same model")
+            raise ValueError("All embeddings must have the same dimensionality")
 
         return valid_units
 
@@ -97,7 +98,7 @@ class EmbeddingSimilaritySearch:
         self.unit_ids = []
 
         for unit in self.valid_units:
-            embeddings.append(unit.embedding.vector)
+            embeddings.append(unit.embeddings[self.model.model_name].vector)
             self.unit_ids.append(unit.id)
 
         embedding_matrix = np.array(embeddings)
@@ -125,15 +126,16 @@ class EmbeddingSimilaritySearch:
         Returns:
             List of SearchResult objects containing matched code units and scores
         """
+        if query_embedding.model_name != self.model.model_name:
+            raise ValueError(
+                f"Query vector was generated with a different model than the code units. "
+                f"Query model: {query_embedding.model_name}, Code unit model: {self.model.model_name}"
+            )
+
         if query_embedding.vector.shape != (self.embedding_dim,):
             raise ValueError(
                 f"Query vector dimension {query_embedding.vector.shape} does not match "
                 f"embedding dimension {self.embedding_dim}"
-            )
-
-        if query_embedding.model_name != self.valid_units[0].embedding.model_name:
-            raise ValueError(
-                "Query vector was generated with a different model than the code units"
             )
 
         # Normalize query vector
@@ -234,6 +236,7 @@ def compare(
     input_path: str = "code_units.json",
     output_path: Optional[str] = None,
     query: str = None,
+    embedding_model: str = "jinaai/jina-embeddings-v3",
 ) -> None:
     """
     Generate similarity scores for code units from a JSON file.
@@ -256,17 +259,19 @@ def compare(
     print(f"Loading code units from {input_path}")
     codebase = CodebaseSnapshot.from_json(Path(input_path))
 
+    embedding_model = EmbeddingModelFactory.create(embedding_model)
+
     # Initialize comparer
-    searcher = EmbeddingSimilaritySearch(codebase)
+    searcher = EmbeddingSimilaritySearch(codebase, embedding_model)
 
     # Generate query embedding
     print(f"Query: {query}")
-    embedder = CodeEmbedder()
-    query_vector = embedder.model.generate_embedding(query)
+    embedder = CodeEmbedder(embedding_model=embedding_model)
+    query_embedding = embedder.model.generate_embedding(query)
 
     # Compare all code units
     print("Generating similarity scores...")
-    results = searcher.find_similar(query_vector)
+    results = searcher.find_similar(query_embedding)
 
     for result in results:
         print(
