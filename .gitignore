@@ -1,3 +1,5 @@
 .idea
 *.json
 .env
+*.egg-info
+diagrams

@@ -1,18 +1,22 @@
-import os
 import ast
+import logging
+import os
+import shutil
 from os.path import expanduser
 from pathlib import Path
-
-import astor
-import shutil
-import logging
 from typing import List, Optional
 
+import astor
 import git
-import fire
 from git import Repo
 
-from storage.code_store import CodebaseSnapshot, Class, Method, Function, File
+from code_assistant.storage.code_store import (
+    CodebaseSnapshot,
+    Class,
+    Method,
+    Function,
+    File,
+)
 
 
 class GitHubCodeExtractor:
@@ -197,7 +201,9 @@ class GitHubCodeExtractor:
     def process_repository(
         self,
         repo_url: str,
-        output_path: Optional[str] = expanduser("~/code_assist/extracted_code_units"),
+        output_path: Optional[Path] = Path(
+            expanduser("~/code_assist/extracted_code_units")
+        ),
         max_files: Optional[int] = None,
         cleanup: bool = True,
     ) -> CodebaseSnapshot:
@@ -238,48 +244,3 @@ class GitHubCodeExtractor:
 
         self.logger.info(f"Extracted {len(snapshot)} code units")
         return snapshot
-
-
-def main(
-    repo_url: str,
-    max_files: Optional[int] = None,
-    github_token: Optional[str] = None,
-    print_all: Optional[bool] = False,
-    repo_download_dir: Optional[str] = os.path.expanduser("~/code_assist/github_repos"),
-    output_path: Optional[str] = os.path.expanduser(
-        "~/code_assist/extracted_code_units"
-    ),
-):
-    """
-    Extract code units from a GitHub repository, including private repos.
-
-    Args:
-        repo_url (str): URL of the GitHub repository to process
-        max_files (int, optional): Limit the number of files to process
-        github_token (str, optional): GitHub Personal Access Token for private repos
-        print_all (bool, optional): Print all extracted code units
-        repo_download_dir (str, optional): Directory to clone repositories into
-        output_path (str, optional): Path to save extracted code units
-    """
-    extractor = GitHubCodeExtractor(
-        github_token=github_token, repo_download_dir=repo_download_dir
-    )
-
-    # Process the repository
-    codebase = extractor.process_repository(
-        repo_url, max_files=max_files, output_path=output_path
-    )
-
-    if not print_all:
-        # Print some extracted units
-        for i, unit in enumerate(codebase.iter_flat()):
-            print(f"{unit.fully_qualified_name()}, Type: {unit.unit_type}")
-            if i == 5:
-                break
-    else:
-        for unit in codebase:
-            print(f"{unit.fully_qualified_name()}, Type: {unit.unit_type}")
-
-
-if __name__ == "__main__":
-    fire.Fire(main)
