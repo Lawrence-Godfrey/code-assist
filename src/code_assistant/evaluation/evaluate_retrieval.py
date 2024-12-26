@@ -1,17 +1,16 @@
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 import numpy as np
 from tqdm import tqdm
 
+from code_assistant.embedding.compare_embeddings import \
+    EmbeddingSimilaritySearch
 from code_assistant.embedding.generate_embeddings import CodeEmbedder
-from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
+from code_assistant.embedding.models.models import EmbeddingModel
+from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import \
+    PromptCodePairDataset
 from code_assistant.storage.code_store import CodebaseSnapshot
-from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
-    PromptCodePairDataset,
-)
-from code_assistant.embedding.models.models import (
-    EmbeddingModel,
-)
 
 
 @dataclass

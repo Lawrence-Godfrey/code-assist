@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Type, TypeVar, Dict, Any, Optional
+from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 import numpy as np
 
 from code_assistant.storage.code_store import CodeEmbedding
-
 
 T = TypeVar("T", bound="EmbeddingModel")
 
@@ -117,7 +116,7 @@ class TransformersEmbeddingModel(EmbeddingModel):
             max_length: Maximum token length for input sequences
         """
         import torch
-        from transformers import AutoTokenizer, AutoModel
+        from transformers import AutoModel, AutoTokenizer
 
         # Store torch module as instance variable to maintain access
         self._torch = torch

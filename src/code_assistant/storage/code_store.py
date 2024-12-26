@@ -1,9 +1,9 @@
-import uuid
-from dataclasses import dataclass, field
-from typing import Dict, Iterable, Iterator, List, Optional, Union
-from pathlib import Path
 import json
+import uuid
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, Iterable, Iterator, List, Optional, Union
 
 import numpy as np
 

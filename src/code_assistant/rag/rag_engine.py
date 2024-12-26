@@ -29,10 +29,9 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
+
 from code_assistant.embedding.compare_embeddings import (
-    EmbeddingSimilaritySearch,
-    SearchResult,
-)
+    EmbeddingSimilaritySearch, SearchResult)
 from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.storage.code_store import CodebaseSnapshot

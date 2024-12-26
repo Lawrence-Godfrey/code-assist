@@ -3,10 +3,10 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Iterator
+from typing import Dict, Iterator, List, Optional
 from uuid import uuid4
 
-from code_assistant.storage.code_store import CodeUnit, CodebaseSnapshot
+from code_assistant.storage.code_store import CodebaseSnapshot, CodeUnit
 
 
 @dataclass

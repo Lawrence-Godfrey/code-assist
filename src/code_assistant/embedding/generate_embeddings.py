@@ -1,5 +1,5 @@
 from code_assistant.embedding.models.models import EmbeddingModel
-from code_assistant.storage.code_store import CodebaseSnapshot, Class
+from code_assistant.storage.code_store import Class, CodebaseSnapshot
 
 
 class CodeEmbedder:
