@@ -51,15 +51,15 @@ class AbstractPromptGenerator(ABC):
     """Abstract base class for prompt-code pair generators."""
 
     def __init__(
-        self,
-        codebase: CodebaseSnapshot,
-        output_path: Path = Path(
-            os.path.expanduser(
-                "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
-            )
-        ),
-        num_rows: Optional[int] = None,
-        unit_types: List[str] = None,
+            self,
+            codebase: CodebaseSnapshot,
+            output_path: Path = Path(
+                os.path.expanduser(
+                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+                )
+            ),
+            num_rows: Optional[int] = None,
+            unit_types: List[str] = None
     ):
         """
         Initialize the prompt generator.
@@ -126,21 +126,23 @@ class OpenAIGenerator(AbstractPromptGenerator):
     """Prompt generator using OpenAI models."""
 
     def __init__(
-        self,
-        codebase: CodebaseSnapshot,
-        config: OpenAIConfig = None,
-        output_path: Path = Path(
-            os.path.expanduser(
-                "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
-            )
-        ),
-        num_rows: Optional[int] = None,
-        unit_types: List[str] = None,
+            self,
+            codebase: CodebaseSnapshot,
+            openai_api_key: str,
+            config: OpenAIConfig = None,
+            output_path: Path = Path(
+                os.path.expanduser(
+                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+                )
+            ),
+            num_rows: Optional[int] = None,
+            unit_types: List[str] = None,
     ):
         """Initialize the OpenAI prompt generator.
 
         Args:
             codebase: Snapshot of the codebase to generate prompts for
+            openai_api_key: OpenAI API key
             config: OpenAI configuration (defaults to default OpenAIConfig)
             output_path: Path to save the generated dataset
             num_rows: Optional limit on number of rows to generate
@@ -148,7 +150,7 @@ class OpenAIGenerator(AbstractPromptGenerator):
         """
         super().__init__(codebase, output_path, num_rows, unit_types)
         self.config = config or OpenAIConfig()
-        self._client = AsyncOpenAI()
+        self._client = AsyncOpenAI(api_key=openai_api_key)
 
     async def _generate_prompt(self, code_unit: CodeUnit) -> str:
         """Generate a prompt using OpenAI's chat completion."""
@@ -158,8 +160,8 @@ class OpenAIGenerator(AbstractPromptGenerator):
                 {"role": "system", "content": self.config.system_prompt},
                 {
                     "role": "user",
-                    "content": f"Generate a prompt for this code:\n\n{code_unit.source_code}",
-                },
+                    "content": f"Generate a prompt for this code:\n\n{code_unit.source_code}"
+                }
             ],
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,

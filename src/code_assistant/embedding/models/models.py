@@ -70,7 +70,7 @@ class EmbeddingModelFactory:
                 f"Unsupported model: {model_name}. "
                 f"Supported models are: {list(cls._models.keys())}"
             )
-        return cls._models[model_name](*args, **kwargs)
+        return cls._models[model_name](model_name, *args, **kwargs)
 
     @classmethod
     def list_models(cls) -> list[str]:
