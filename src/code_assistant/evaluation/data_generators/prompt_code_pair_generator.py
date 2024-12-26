@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import random
@@ -7,15 +6,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-import fire
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from storage.code_store import CodebaseSnapshot, CodeUnit
-from evaluation.data_generators.prompt_code_pair_dataset import (
+from code_assistant.storage.code_store import CodebaseSnapshot, CodeUnit
+from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePair,
-    PromptCodePairDataset
+    PromptCodePairDataset,
 )
 
 load_dotenv()
@@ -53,15 +51,15 @@ class AbstractPromptGenerator(ABC):
     """Abstract base class for prompt-code pair generators."""
 
     def __init__(
-            self,
-            codebase: CodebaseSnapshot,
-            output_path: Path = Path(
-                os.path.expanduser(
-                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
-                )
-            ),
-            num_rows: Optional[int] = None,
-            unit_types: List[str] = None
+        self,
+        codebase: CodebaseSnapshot,
+        output_path: Path = Path(
+            os.path.expanduser(
+                "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+            )
+        ),
+        num_rows: Optional[int] = None,
+        unit_types: List[str] = None,
     ):
         """
         Initialize the prompt generator.
@@ -101,8 +99,7 @@ class AbstractPromptGenerator(ABC):
         dataset = PromptCodePairDataset()
 
         for code_unit in tqdm(
-                filtered_units,
-                desc=f"Generating prompts with {self.__class__.__name__}"
+            filtered_units, desc=f"Generating prompts with {self.__class__.__name__}"
         ):
             try:
                 prompt = await self._generate_prompt(code_unit)
@@ -129,16 +126,16 @@ class OpenAIGenerator(AbstractPromptGenerator):
     """Prompt generator using OpenAI models."""
 
     def __init__(
-            self,
-            codebase: CodebaseSnapshot,
-            config: OpenAIConfig = None,
-            output_path: Path = Path(
-                os.path.expanduser(
-                    "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
-                )
-            ),
-            num_rows: Optional[int] = None,
-            unit_types: List[str] = None
+        self,
+        codebase: CodebaseSnapshot,
+        config: OpenAIConfig = None,
+        output_path: Path = Path(
+            os.path.expanduser(
+                "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
+            )
+        ),
+        num_rows: Optional[int] = None,
+        unit_types: List[str] = None,
     ):
         """Initialize the OpenAI prompt generator.
 
@@ -161,10 +158,10 @@ class OpenAIGenerator(AbstractPromptGenerator):
                 {"role": "system", "content": self.config.system_prompt},
                 {
                     "role": "user",
-                    "content": f"Generate a prompt for this code:\n\n{code_unit.source_code}"
-                }
+                    "content": f"Generate a prompt for this code:\n\n{code_unit.source_code}",
+                },
             ],
             temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens
+            max_tokens=self.config.max_tokens,
         )
         return response.choices[0].message.content.strip()

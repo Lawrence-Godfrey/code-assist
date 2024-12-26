@@ -1,18 +1,16 @@
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
 from tqdm import tqdm
 
-from embedding.generate_embeddings import CodeEmbedder
-from embedding.compare_embeddings import EmbeddingSimilaritySearch
-from storage.code_store import CodebaseSnapshot
-from evaluation.data_generators.prompt_code_pair_dataset import PromptCodePairDataset
-from embedding.models.models import (
-    EmbeddingModelFactory,
+from code_assistant.embedding.generate_embeddings import CodeEmbedder
+from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
+from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
+    PromptCodePairDataset,
+)
+from code_assistant.embedding.models.models import (
     EmbeddingModel,
-    OpenAIEmbeddingModel,
 )
 
 

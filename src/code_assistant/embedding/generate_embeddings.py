@@ -1,16 +1,7 @@
-import os
-from pathlib import Path
-from typing import Optional
-
-import fire
-from dotenv import load_dotenv
-
-from embedding.models.models import (
-    EmbeddingModelFactory,
-    OpenAIEmbeddingModel,
+from code_assistant.embedding.models.models import (
     EmbeddingModel,
 )
-from storage.code_store import CodebaseSnapshot, Class
+from code_assistant.storage.code_store import CodebaseSnapshot, Class
 
 
 class CodeEmbedder:

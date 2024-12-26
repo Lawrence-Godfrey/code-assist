@@ -25,16 +25,17 @@ Requirements:
 
 import logging
 import os
-from pathlib import Path
 from typing import List, Optional
 
-import fire
 from dotenv import load_dotenv
 from openai import OpenAI
-from embedding.compare_embeddings import EmbeddingSimilaritySearch, SearchResult
-from embedding.generate_embeddings import CodeEmbedder
-from embedding.models.models import EmbeddingModel, EmbeddingModelFactory
-from storage.code_store import CodebaseSnapshot
+from code_assistant.embedding.compare_embeddings import (
+    EmbeddingSimilaritySearch,
+    SearchResult,
+)
+from code_assistant.embedding.generate_embeddings import CodeEmbedder
+from code_assistant.embedding.models.models import EmbeddingModel
+from code_assistant.storage.code_store import CodebaseSnapshot
 
 load_dotenv()
 

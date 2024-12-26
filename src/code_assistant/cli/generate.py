@@ -2,8 +2,11 @@ import asyncio
 from pathlib import Path
 from typing import Optional, List
 
-from evaluation.data_generators.prompt_code_pair_generator import OpenAIGenerator, OpenAIConfig
-from storage.code_store import CodebaseSnapshot
+from code_assistant.evaluation.data_generators.prompt_code_pair_generator import (
+    OpenAIGenerator,
+    OpenAIConfig,
+)
+from code_assistant.storage.code_store import CodebaseSnapshot
 
 
 class GenerateCommands:

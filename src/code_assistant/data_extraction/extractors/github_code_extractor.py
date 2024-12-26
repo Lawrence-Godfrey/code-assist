@@ -7,11 +7,16 @@ from pathlib import Path
 from typing import List, Optional
 
 import astor
-import fire
 import git
 from git import Repo
 
-from storage.code_store import CodebaseSnapshot, Class, Method, Function, File
+from code_assistant.storage.code_store import (
+    CodebaseSnapshot,
+    Class,
+    Method,
+    Function,
+    File,
+)
 
 
 class GitHubCodeExtractor:
@@ -196,7 +201,9 @@ class GitHubCodeExtractor:
     def process_repository(
         self,
         repo_url: str,
-        output_path: Optional[Path] = Path(expanduser("~/code_assist/extracted_code_units")),
+        output_path: Optional[Path] = Path(
+            expanduser("~/code_assist/extracted_code_units")
+        ),
         max_files: Optional[int] = None,
         cleanup: bool = True,
     ) -> CodebaseSnapshot:

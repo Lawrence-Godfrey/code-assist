@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 from uuid import uuid4
 
-from storage.code_store import CodeUnit, CodebaseSnapshot
+from code_assistant.storage.code_store import CodeUnit, CodebaseSnapshot
 
 
 @dataclass
@@ -35,22 +35,28 @@ class SplitConfig:
 
         # Check train ratio
         if self.train_ratio <= 0:
-            raise ValueError(f"Train ratio must be greater than 0, got {self.train_ratio}")
+            raise ValueError(
+                f"Train ratio must be greater than 0, got {self.train_ratio}"
+            )
 
         # Check test ratio
         if self.test_ratio <= 0:
-            raise ValueError(f"Test ratio must be greater than 0, got {self.test_ratio}")
+            raise ValueError(
+                f"Test ratio must be greater than 0, got {self.test_ratio}"
+            )
 
         # Check validation ratio is non-negative
         if self.validation_ratio < 0:
-            raise ValueError(f"Validation ratio cannot be negative, got {self.validation_ratio}")
+            raise ValueError(
+                f"Validation ratio cannot be negative, got {self.validation_ratio}"
+            )
 
     def save_config(
         self,
         output_dir: Path,
         train_samples: int,
         validation_samples: int,
-        test_samples: int
+        test_samples: int,
     ) -> None:
         """
         Save split configuration and results to JSON file.
@@ -67,20 +73,20 @@ class SplitConfig:
             "ratios": {
                 "train_ratio": self.train_ratio,
                 "validation_ratio": self.validation_ratio,
-                "test_ratio": self.test_ratio
+                "test_ratio": self.test_ratio,
             },
             "random_seed": self.random_seed,
             "samples": {
                 "total_samples": total_samples,
                 "train_samples": train_samples,
                 "validation_samples": validation_samples,
-                "test_samples": test_samples
+                "test_samples": test_samples,
             },
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
         }
 
         config_path = output_dir / "split_config.json"
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=2)
 
 
@@ -94,9 +100,7 @@ class PromptCodePair:
     prompt: str
     code_unit: CodeUnit
     id: str = field(default_factory=lambda: str(uuid4()))
-    generated_at: str = field(
-        default_factory=lambda: datetime.now().isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     @property
     def unit_type(self) -> str:
@@ -126,8 +130,9 @@ class PromptCodePair:
             prompt=data["prompt"],
             code_unit=code_unit,
             id=data.get("id", str(uuid4())),
-            generated_at=data.get("generated_at", datetime.now().isoformat())
+            generated_at=data.get("generated_at", datetime.now().isoformat()),
         )
+
 
 @dataclass
 class PromptCodePairDataset:
@@ -136,10 +141,10 @@ class PromptCodePairDataset:
     """
 
     _pairs: List[PromptCodePair] = field(default_factory=list)
-    _id_index: Dict[str, PromptCodePair] = field(default_factory=dict,
-                                                 init=False)
-    _code_unit_index: Dict[str, PromptCodePair] = field(default_factory=dict,
-                                                        init=False)
+    _id_index: Dict[str, PromptCodePair] = field(default_factory=dict, init=False)
+    _code_unit_index: Dict[str, PromptCodePair] = field(
+        default_factory=dict, init=False
+    )
 
     def __post_init__(self):
         """Initialize indices for efficient lookups."""
@@ -187,14 +192,12 @@ class PromptCodePairDataset:
         data = [pair.to_dict() for pair in self._pairs]
         json_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(json_path, 'w', encoding='utf-8') as f:
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     @classmethod
     def from_json(
-        cls,
-        json_path: Path,
-        codebase: CodebaseSnapshot
+        cls, json_path: Path, codebase: CodebaseSnapshot
     ) -> "PromptCodePairDataset":
         """
         Load a dataset from a JSON file.
@@ -204,7 +207,7 @@ class PromptCodePairDataset:
             codebase: CodebaseSnapshot to link code units
         """
         dataset = cls()
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         for pair_data in data:
@@ -223,9 +226,7 @@ class PromptCodePairDataset:
         return new_dataset
 
     def create_splits(
-        self,
-        output_dir: Path,
-        config: Optional[SplitConfig] = None
+        self, output_dir: Path, config: Optional[SplitConfig] = None
     ) -> Dict[str, "PromptCodePairDataset"]:
         """
         Create dataset splits based on provided configuration and save them.
@@ -267,30 +268,24 @@ class PromptCodePairDataset:
         train_dataset = PromptCodePairDataset()
         for pair in train_pairs:
             train_dataset.add_pair(pair)
-        train_dataset.to_json(
-            output_dir / "train_prompt_code_pair_dataset.json"
-        )
-        split_datasets['train'] = train_dataset
+        train_dataset.to_json(output_dir / "train_prompt_code_pair_dataset.json")
+        split_datasets["train"] = train_dataset
 
         # Create validation dataset if validation ratio > 0
         if config.validation_ratio > 0:
-            val_pairs = all_pairs[train_size: train_size + val_size]
+            val_pairs = all_pairs[train_size : train_size + val_size]
             val_dataset = PromptCodePairDataset()
             for pair in val_pairs:
                 val_dataset.add_pair(pair)
-            val_dataset.to_json(
-                output_dir / "validate_prompt_code_pair_dataset.json"
-            )
-            split_datasets['validation'] = val_dataset
+            val_dataset.to_json(output_dir / "validate_prompt_code_pair_dataset.json")
+            split_datasets["validation"] = val_dataset
 
-        test_pairs = all_pairs[train_size + val_size:]
+        test_pairs = all_pairs[train_size + val_size :]
         test_dataset = PromptCodePairDataset()
         for pair in test_pairs:
             test_dataset.add_pair(pair)
-        test_dataset.to_json(
-            output_dir / "test_prompt_code_pair_dataset.json"
-        )
-        split_datasets['test'] = test_dataset
+        test_dataset.to_json(output_dir / "test_prompt_code_pair_dataset.json")
+        split_datasets["test"] = test_dataset
 
         # Save configuration
         config.save_config(
@@ -304,8 +299,7 @@ class PromptCodePairDataset:
 
     @staticmethod
     def load_splits(
-        split_dir: Path,
-        codebase: CodebaseSnapshot
+        split_dir: Path, codebase: CodebaseSnapshot
     ) -> Dict[str, "PromptCodePairDataset"]:
         """
         Load previously created dataset splits.
@@ -323,24 +317,20 @@ class PromptCodePairDataset:
         # Load training dataset (required)
         train_path = split_dir / "train_prompt_code_pair_dataset.json"
         if not train_path.exists():
-            raise FileNotFoundError(
-                "Training dataset not found in splits directory"
-            )
+            raise FileNotFoundError("Training dataset not found in splits directory")
 
         # Load testing dataset (required)
         test_path = split_dir / "test_prompt_code_pair_dataset.json"
         if not test_path.exists():
-            raise FileNotFoundError(
-                "Test dataset not found in splits directory"
-            )
+            raise FileNotFoundError("Test dataset not found in splits directory")
 
-        splits['train'] = PromptCodePairDataset.from_json(train_path, codebase)
-        splits['test'] = PromptCodePairDataset.from_json(test_path, codebase)
+        splits["train"] = PromptCodePairDataset.from_json(train_path, codebase)
+        splits["test"] = PromptCodePairDataset.from_json(test_path, codebase)
 
         # Try loading validation dataset
         val_path = split_dir / "validate_prompt_code_pair_dataset.json"
         if val_path.exists():
-            splits['validation'] = PromptCodePairDataset.from_json(val_path, codebase)
+            splits["validation"] = PromptCodePairDataset.from_json(val_path, codebase)
 
         return splits
 

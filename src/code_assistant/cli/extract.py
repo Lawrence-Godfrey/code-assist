@@ -2,7 +2,9 @@ from pathlib import Path
 from typing import Optional
 import os
 
-from data_extraction.extractors.github_code_extractor import GitHubCodeExtractor
+from code_assistant.data_extraction.extractors.github_code_extractor import (
+    GitHubCodeExtractor,
+)
 
 
 class ExtractCommands:

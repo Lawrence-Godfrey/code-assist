@@ -1,15 +1,14 @@
-import json
-import os
 from dataclasses import dataclass
-from pathlib import Path
 
-import fire
 import numpy as np
 from typing import List, Optional
 
-from embedding.generate_embeddings import CodeEmbedder
-from embedding.models.models import EmbeddingModel, EmbeddingModelFactory
-from storage.code_store import CodebaseSnapshot, CodeUnit, CodeEmbedding
+from code_assistant.embedding.models.models import EmbeddingModel
+from code_assistant.storage.code_store import (
+    CodebaseSnapshot,
+    CodeUnit,
+    CodeEmbedding,
+)
 
 
 @dataclass
