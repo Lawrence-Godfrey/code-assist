@@ -11,7 +11,9 @@ from openai import AsyncOpenAI
 from tqdm import tqdm
 
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
-    PromptCodePair, PromptCodePairDataset)
+    PromptCodePair,
+    PromptCodePairDataset,
+)
 from code_assistant.storage.code_store import CodebaseSnapshot, CodeUnit
 
 load_dotenv()

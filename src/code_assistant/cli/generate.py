@@ -3,7 +3,9 @@ from pathlib import Path
 from typing import List, Optional
 
 from code_assistant.evaluation.data_generators.prompt_code_pair_generator import (
-    OpenAIConfig, OpenAIGenerator)
+    OpenAIConfig,
+    OpenAIGenerator,
+)
 from code_assistant.storage.code_store import CodebaseSnapshot
 
 

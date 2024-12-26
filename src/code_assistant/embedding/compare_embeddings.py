@@ -4,8 +4,7 @@ from typing import List, Optional
 import numpy as np
 
 from code_assistant.embedding.models.models import EmbeddingModel
-from code_assistant.storage.code_store import (CodebaseSnapshot, CodeEmbedding,
-                                               CodeUnit)
+from code_assistant.storage.code_store import CodebaseSnapshot, CodeEmbedding, CodeUnit
 
 
 @dataclass
