@@ -3,11 +3,9 @@ from pathlib import Path
 from typing import Optional
 
 import fire
-from dotenv import load_dotenv
 
 from embedding.models.models import (
     EmbeddingModelFactory,
-    OpenAIEmbeddingModel,
     EmbeddingModel,
 )
 from storage.code_store import CodebaseSnapshot, Class
@@ -51,7 +49,7 @@ class CodeEmbedder:
                         f"filepath: {unit.file.filepath}, "
                         f"source_code: {unit.source_code}"
                     )
-                    unit.embedding = self.model.generate_embedding(formatted_string)
+                    unit.embeddings[self.model.model_name] = self.model.generate_embedding(formatted_string)
 
                     if isinstance(unit, Class):
                         for method in unit.methods:
@@ -62,7 +60,7 @@ class CodeEmbedder:
                                 f"name: {method.name}, "
                                 f"source_code: {method.source_code}"
                             )
-                            method.embedding = self.model.generate_embedding(
+                            method.embeddings[self.model.model_name] = self.model.generate_embedding(
                                 formatted_string
                             )
 

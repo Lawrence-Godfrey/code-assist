@@ -131,6 +131,7 @@ class OpenAIGenerator(AbstractPromptGenerator):
     def __init__(
             self,
             codebase: CodebaseSnapshot,
+            openai_api_key: str,
             config: OpenAIConfig = None,
             output_path: Path = Path(
                 os.path.expanduser(
@@ -138,12 +139,13 @@ class OpenAIGenerator(AbstractPromptGenerator):
                 )
             ),
             num_rows: Optional[int] = None,
-            unit_types: List[str] = None
+            unit_types: List[str] = None,
     ):
         """Initialize the OpenAI prompt generator.
 
         Args:
             codebase: Snapshot of the codebase to generate prompts for
+            openai_api_key: OpenAI API key
             config: OpenAI configuration (defaults to default OpenAIConfig)
             output_path: Path to save the generated dataset
             num_rows: Optional limit on number of rows to generate
@@ -151,7 +153,7 @@ class OpenAIGenerator(AbstractPromptGenerator):
         """
         super().__init__(codebase, output_path, num_rows, unit_types)
         self.config = config or OpenAIConfig()
-        self._client = AsyncOpenAI()
+        self._client = AsyncOpenAI(api_key=openai_api_key)
 
     async def _generate_prompt(self, code_unit: CodeUnit) -> str:
         """Generate a prompt using OpenAI's chat completion."""
@@ -172,6 +174,7 @@ class OpenAIGenerator(AbstractPromptGenerator):
 
 async def main(
     code_units_path: str,
+    openai_api_key: str,
     dataset_output_path: Optional[str] = Path(
         os.path.expanduser("~/code_assist/datasets/synthetic/prompt_code_pairs.json")
     ),
@@ -185,6 +188,7 @@ async def main(
     
     Args:
         code_units_path: Path to the JSON file containing code units from a codebase.
+        openai_api_key: OpenAI API key for model access.
         dataset_output_path: Path where the generated prompt-code pairs dataset
             will be saved.
         num_rows: Number of code units to process. If None, processes all available units.
@@ -202,6 +206,7 @@ async def main(
     # Create generator with provided configuration
     openai_generator = OpenAIGenerator(
         codebase=codebase,
+        openai_api_key=openai_api_key,
         output_path=Path(dataset_output_path),
         num_rows=num_rows,
         unit_types=unit_types,
@@ -214,6 +219,7 @@ async def main(
     # Generate dataset and save to specified path
     await openai_generator.generate_and_save()
 
+
 def run_main(**kwargs):
     """
     Wrapper function to run the async main function with Fire.
@@ -222,6 +228,7 @@ def run_main(**kwargs):
     managing the async execution.
     """
     return asyncio.run(main(**kwargs))
+
 
 if __name__ == "__main__":
     fire.Fire(run_main)
