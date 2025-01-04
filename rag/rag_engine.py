@@ -23,7 +23,6 @@ Requirements:
     - Pre-generated code embeddings in JSON format
 """
 
-import json
 import logging
 import os
 from pathlib import Path
@@ -34,7 +33,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from embedding.compare_embeddings import EmbeddingSimilaritySearch, SearchResult
 from embedding.generate_embeddings import CodeEmbedder
-from storage.code_store import CodebaseSnapshot, CodeEmbedding
+from embedding.models.models import EmbeddingModel, EmbeddingModelFactory
+from storage.code_store import CodebaseSnapshot
 
 load_dotenv()
 
@@ -48,8 +48,8 @@ class RAGEngine:
     def __init__(
         self,
         codebase: CodebaseSnapshot,
+        embedding_model: EmbeddingModel,
         prompt_model: Optional[str] = "gpt-4",
-        embedding_model: Optional[str] = "microsoft/codebert-base",
         top_k: Optional[int] = 5,
         threshold: Optional[float] = None,
         logging_enabled: Optional[bool] = False,
@@ -62,7 +62,7 @@ class RAGEngine:
             prompt_model: Name of the large LLM model to use for response
                 generation. Defaults to "gpt-4".
             embedding_model: Name of the model to use for generating embeddings.
-                Defaults to "microsoft/codebert-base".
+                Defaults to "jinaai/jina-embeddings-v3".
             top_k: Maximum number of similar code units to retrieve. Defaults to 5.
             threshold: Minimum similarity score (0-1) required for retrieved code
                 units. Defaults to None.
@@ -80,7 +80,9 @@ class RAGEngine:
 
         # Initialize embedder and similarity searcher
         self._embedder = CodeEmbedder(embedding_model=embedding_model)
-        self._searcher = EmbeddingSimilaritySearch(codebase=codebase)
+        self._searcher = EmbeddingSimilaritySearch(
+            codebase=codebase, embedding_model=embedding_model
+        )
 
         # Initialise large LLM client. At this point, only OpenAI is available.
         if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
@@ -122,10 +124,8 @@ class RAGEngine:
             similar_code_units (List[SearchResult]): The k most similar code
                 units to the query, in order from most similar to least similar.
         """
-        query_vector = self._embedder.model.generate_embedding(query)
-        query_embedding = CodeEmbedding(
-            vector=query_vector, model_name=self._embedder.model.model_name
-        )
+        query_embedding = self._embedder.model.generate_embedding(query)
+
         # Find code units similar to the query
         similar_code_units = self._searcher.find_similar(
             query_embedding=query_embedding,
@@ -235,7 +235,7 @@ def main(
     query: str,
     code_units_path: str,
     prompt_model: Optional[str] = "gpt-4",
-    embedding_model: Optional[str] = "microsoft/codebert-base",
+    embedding_model: Optional[str] = "jinaai/jina-embeddings-v3",
     top_k: Optional[int] = 5,
     threshold: Optional[float] = None,
     logging_enabled: Optional[bool] = True,
@@ -249,7 +249,7 @@ def main(
        prompt_model: Name of the LLM model for response generation. Defaults to
            "gpt-4".
        embedding_model: Name of the model for generating embeddings. Defaults to
-           "microsoft/codebert-base".
+           "jinaai/jina-embeddings-v3".
        top_k: Maximum number of similar code units to retrieve. Defaults to 5.
        threshold: Minimum similarity score (0-1) for retrieved code units.
            Defaults to None.
@@ -271,6 +271,7 @@ def main(
         )
 
     codebase = CodebaseSnapshot.from_json(Path(code_units_path))
+    embedding_model = EmbeddingModelFactory.create(embedding_model)
 
     engine = RAGEngine(
         codebase=codebase,
