@@ -1,18 +1,16 @@
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
 from tqdm import tqdm
 
-from embedding.generate_embeddings import CodeEmbedder
-from embedding.compare_embeddings import EmbeddingSimilaritySearch
-from storage.code_store import CodebaseSnapshot
-from evaluation.data_generators.prompt_code_pair_dataset import PromptCodePairDataset
-from embedding.models.models import (
-    EmbeddingModelFactory,
+from code_assistant.embedding.generate_embeddings import CodeEmbedder
+from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
+from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
+    PromptCodePairDataset,
+)
+from code_assistant.embedding.models.models import (
     EmbeddingModel,
-    OpenAIEmbeddingModel,
 )
 
 
@@ -267,62 +265,3 @@ class MultiModelCodeRetrievalEvaluator:
             print(f"\n{metrics.model_name}:")
             print(f"  Correct matches: {metrics.mean_similarity_correct:.3f}")
             print(f"  Incorrect matches: {metrics.mean_similarity_incorrect:.3f}")
-
-
-def main(
-    test_data_path: str,
-    codebase_path: str,
-    output_path: Optional[str] = None,
-    openai_api_key: Optional[str] = None,
-) -> None:
-    """
-    Run evaluation across all models and save results.
-
-    Args:
-        test_data_path: Path to test dataset JSON
-        codebase_path: Path to embedded codebase JSON
-        output_path: Optional path to save evaluation results
-        openai_api_key: Optional OpenAI API key for OpenAI models
-    """
-    # Load test dataset and codebase
-    test_dataset = PromptCodePairDataset.from_json(
-        Path(test_data_path), CodebaseSnapshot.from_json(Path(codebase_path))
-    )
-    codebase = CodebaseSnapshot.from_json(Path(codebase_path))
-
-    models = []
-    model_classes = EmbeddingModelFactory.models()
-    for model_name, cls in model_classes.items():
-        if issubclass(cls, OpenAIEmbeddingModel):
-            model = cls(model_name=model_name, api_key=openai_api_key)
-            models.append(model)
-        else:
-            model = cls(model_name=model_name)
-            models.append(model)
-
-    # Initialize multi-model evaluator
-    evaluator = MultiModelCodeRetrievalEvaluator(
-        test_dataset=test_dataset, codebase=codebase, models=models
-    )
-
-    # Run evaluation for all models
-    metrics_list = evaluator.evaluate_all_models()
-
-    # Print comparison
-    evaluator.print_comparison(metrics_list)
-
-    # Save results if output path provided
-    if output_path:
-        results = {
-            "metrics": [metrics.to_dict() for metrics in metrics_list],
-            "evaluated_at": str(Path(output_path).resolve()),
-        }
-
-        with open(output_path, "w") as f:
-            json.dump(results, f, indent=2)
-
-
-if __name__ == "__main__":
-    import fire
-
-    fire.Fire(main)

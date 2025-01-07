@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import random
@@ -7,15 +6,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-import fire
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from storage.code_store import CodebaseSnapshot, CodeUnit
-from evaluation.data_generators.prompt_code_pair_dataset import (
+from code_assistant.storage.code_store import CodebaseSnapshot, CodeUnit
+from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePair,
-    PromptCodePairDataset
+    PromptCodePairDataset,
 )
 
 load_dotenv()
@@ -101,8 +99,7 @@ class AbstractPromptGenerator(ABC):
         dataset = PromptCodePairDataset()
 
         for code_unit in tqdm(
-                filtered_units,
-                desc=f"Generating prompts with {self.__class__.__name__}"
+            filtered_units, desc=f"Generating prompts with {self.__class__.__name__}"
         ):
             try:
                 prompt = await self._generate_prompt(code_unit)
@@ -167,68 +164,6 @@ class OpenAIGenerator(AbstractPromptGenerator):
                 }
             ],
             temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens
+            max_tokens=self.config.max_tokens,
         )
         return response.choices[0].message.content.strip()
-
-
-async def main(
-    code_units_path: str,
-    openai_api_key: str,
-    dataset_output_path: Optional[str] = Path(
-        os.path.expanduser("~/code_assist/datasets/synthetic/prompt_code_pairs.json")
-    ),
-    num_rows: Optional[int] = None,
-    unit_types: Optional[List[str]] = ["function", "method", "class"],
-    temperature: Optional[float] = 0.7,
-    max_tokens: Optional[int] = 150,
-) -> None:
-    """
-    Generate prompt-code pairs using OpenAI and save them to a dataset.
-    
-    Args:
-        code_units_path: Path to the JSON file containing code units from a codebase.
-        openai_api_key: OpenAI API key for model access.
-        dataset_output_path: Path where the generated prompt-code pairs dataset
-            will be saved.
-        num_rows: Number of code units to process. If None, processes all available units.
-        unit_types: List of code unit types to include. Defaults to ["function", "method", "class"].
-        temperature: Sampling temperature for the OpenAI model. Higher values makes
-            output more random. Defaults to 0.7.
-        max_tokens: Maximum number of tokens in generated prompts. Defaults to 150.
-
-    Returns:
-        None. Saves the generated dataset to the specified output path.
-    """
-    # Load codebase from provided path
-    codebase = CodebaseSnapshot.from_json(Path(code_units_path))
-
-    # Create generator with provided configuration
-    openai_generator = OpenAIGenerator(
-        codebase=codebase,
-        openai_api_key=openai_api_key,
-        output_path=Path(dataset_output_path),
-        num_rows=num_rows,
-        unit_types=unit_types,
-        config=OpenAIConfig(
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-    )
-
-    # Generate dataset and save to specified path
-    await openai_generator.generate_and_save()
-
-
-def run_main(**kwargs):
-    """
-    Wrapper function to run the async main function with Fire.
-
-    Allows Fire to handle command-line arguments while properly
-    managing the async execution.
-    """
-    return asyncio.run(main(**kwargs))
-
-
-if __name__ == "__main__":
-    fire.Fire(run_main)

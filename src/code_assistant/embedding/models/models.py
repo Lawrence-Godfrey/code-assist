@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Type, TypeVar, Dict, Any, Optional, List
+from typing import Callable, Type, TypeVar, Dict, Any, Optional
 
 import numpy as np
 
-from storage.code_store import CodeEmbedding
+from code_assistant.storage.code_store import CodeEmbedding
 
 
 T = TypeVar("T", bound="EmbeddingModel")
