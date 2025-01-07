@@ -2,17 +2,17 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from code_assistant.evaluation.evaluate_retrieval import (
-    MultiModelCodeRetrievalEvaluator,
-)
-from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
-    PromptCodePairDataset,
-)
-from code_assistant.storage.code_store import CodebaseSnapshot
 from code_assistant.embedding.models.models import (
     EmbeddingModelFactory,
     OpenAIEmbeddingModel,
 )
+from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
+    PromptCodePairDataset,
+)
+from code_assistant.evaluation.evaluate_retrieval import (
+    MultiModelCodeRetrievalEvaluator,
+)
+from code_assistant.storage.code_store import CodebaseSnapshot
 
 
 class EvaluateCommands:

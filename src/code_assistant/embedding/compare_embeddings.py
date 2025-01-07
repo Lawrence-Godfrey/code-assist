@@ -1,14 +1,10 @@
 from dataclasses import dataclass
-
-import numpy as np
 from typing import List, Optional
 
+import numpy as np
+
 from code_assistant.embedding.models.models import EmbeddingModel
-from code_assistant.storage.code_store import (
-    CodebaseSnapshot,
-    CodeUnit,
-    CodeEmbedding,
-)
+from code_assistant.storage.code_store import CodebaseSnapshot, CodeEmbedding, CodeUnit
 
 
 @dataclass

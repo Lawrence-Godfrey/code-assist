@@ -1,6 +1,6 @@
 import fire
 
-from code_assistant.cli import embed, extract, evaluate, generate
+from code_assistant.cli import embed, evaluate, extract, generate
 
 
 class CLI:

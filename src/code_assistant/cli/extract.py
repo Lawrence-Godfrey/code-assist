@@ -1,6 +1,6 @@
+import os
 from pathlib import Path
 from typing import Optional
-import os
 
 from code_assistant.data_extraction.extractors.github_code_extractor import (
     GitHubCodeExtractor,

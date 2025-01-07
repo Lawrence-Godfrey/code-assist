@@ -11,11 +11,11 @@ import git
 from git import Repo
 
 from code_assistant.storage.code_store import (
-    CodebaseSnapshot,
     Class,
-    Method,
-    Function,
+    CodebaseSnapshot,
     File,
+    Function,
+    Method,
 )
 
 

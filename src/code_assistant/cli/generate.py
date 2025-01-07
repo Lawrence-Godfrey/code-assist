@@ -1,10 +1,10 @@
 import asyncio
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 from code_assistant.evaluation.data_generators.prompt_code_pair_generator import (
-    OpenAIGenerator,
     OpenAIConfig,
+    OpenAIGenerator,
 )
 from code_assistant.storage.code_store import CodebaseSnapshot
 
