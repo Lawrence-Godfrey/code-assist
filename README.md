@@ -58,6 +58,27 @@ code-assistant evaluate retrieval \
     --output-path="evaluation_results.json"
 ```
 
+### RAG Prompt (End-to-End)
+
+**Basic usage**
+```bash
+code-assistant rag prompt \
+    --query="How do I handle errors in this codebase?" \
+    --codebase-path="embedded_code_units.json"
+```
+
+**Advanced usage with all options**
+```bash
+code-assistant rag prompt \
+    --query="How do I handle errors?" \
+    --codebase-path="embedded_code_units.json" \
+    --embedding-model="jinaai/jina-embeddings-v3" \
+    --prompt-model="gpt-4" \
+    --top-k=5 \
+    --threshold=0.5 \
+    --logging-enabled=True
+```
+
 ## Environment Variables
 
 The following environment variables can be set:

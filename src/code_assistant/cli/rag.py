@@ -15,7 +15,8 @@ class RagCommands:
     def prompt(
         self,
         query: str,
-        codebase_path: str,
+        codebase_path: Optional[str] = None,
+        database_url: Optional[str] = None,
         embedding_model: str = "jinaai/jina-embeddings-v3",
         prompt_model: str = "gpt-4",
         top_k: int = 5,
@@ -28,6 +29,7 @@ class RagCommands:
         Args:
             query: The question or request about the codebase
             codebase_path: Path to the JSON file containing embedded code units
+            database_url: URL of the database containing embedded code units
             embedding_model: Name of the model to use for embeddings
             prompt_model: Name of the LLM to use for response generation
             top_k: Maximum number of similar code units to retrieve
@@ -37,8 +39,14 @@ class RagCommands:
         LoggingConfig.enabled = logging_enabled
 
         # Load codebase
-        logger.info(f"Loading codebase from {codebase_path}")
-        codebase = CodebaseSnapshot.from_json(Path(codebase_path))
+        if codebase_path:
+            logger.info(f"Loading codebase from {codebase_path}")
+            codebase = CodebaseSnapshot.from_json(Path(codebase_path))
+        elif database_url:
+            logger.info(f"Loading codebase from database: {database_url}")
+            codebase = CodebaseSnapshot.from_database(database_url)
+        else:
+            raise ValueError("Either codebase_path or database_url must be provided.")
 
         # Initialize embedding model
         embedding_model = EmbeddingModelFactory.create(embedding_model)

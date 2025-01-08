@@ -7,6 +7,8 @@ from typing import Dict, Iterable, Iterator, List, Optional, Union
 
 import numpy as np
 
+from code_assistant.storage.database_storage import StorageFactory, DatabaseConfig
+
 
 @dataclass
 class CodeEmbedding:
@@ -397,6 +399,14 @@ class CodebaseSnapshot(Iterable[File]):
             data = json.load(f)
 
         return cls.from_dict(data)
+
+    @classmethod
+    def from_database(cls, database_url: str) -> "CodebaseSnapshot":
+        """Load code units from a database."""
+        db_conf = DatabaseConfig(database_url)
+        storage = StorageFactory.create_codebase_storage(db_conf)
+
+        return storage.load_codebase()
 
     @classmethod
     def from_dict(cls, data: List[dict]) -> "CodebaseSnapshot":
