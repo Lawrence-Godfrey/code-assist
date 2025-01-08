@@ -10,8 +10,8 @@ from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
-from code_assistant.storage.code_store import CodebaseSnapshot
 from code_assistant.logging.logger import get_logger
+from code_assistant.storage.code_store import CodebaseSnapshot
 
 logger = get_logger(__name__)
 

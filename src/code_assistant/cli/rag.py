@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
+from code_assistant.embedding.models.models import EmbeddingModelFactory
+from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.rag.rag_engine import RAGEngine
 from code_assistant.storage.code_store import CodebaseSnapshot
-from code_assistant.embedding.models.models import EmbeddingModelFactory
-from code_assistant.logging.logger import get_logger, LoggingConfig
 
 logger = get_logger(__name__)
 

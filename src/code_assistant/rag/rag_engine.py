@@ -34,8 +34,8 @@ from code_assistant.embedding.compare_embeddings import (
 )
 from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModel
-from code_assistant.storage.code_store import CodebaseSnapshot
 from code_assistant.logging.logger import get_logger
+from code_assistant.storage.code_store import CodebaseSnapshot
 
 logger = get_logger(__name__)
 

@@ -5,8 +5,8 @@ from typing import Optional
 from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
 from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModelFactory
-from code_assistant.storage.code_store import CodebaseSnapshot
 from code_assistant.logging.logger import get_logger
+from code_assistant.storage.code_store import CodebaseSnapshot
 
 logger = get_logger(__name__)
 

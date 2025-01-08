@@ -3,8 +3,8 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 import numpy as np
 
-from code_assistant.storage.code_store import CodeEmbedding
 from code_assistant.logging.logger import get_logger
+from code_assistant.storage.code_store import CodeEmbedding
 
 logger = get_logger(__name__)
 
