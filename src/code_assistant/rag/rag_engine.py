@@ -23,11 +23,9 @@ Requirements:
     - Pre-generated code embeddings in JSON format
 """
 
-import logging
 import os
 from typing import List, Optional
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
 from code_assistant.embedding.compare_embeddings import (
@@ -37,13 +35,9 @@ from code_assistant.embedding.compare_embeddings import (
 from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.logging.logger import get_logger
 
-load_dotenv()
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s: %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RAGEngine:
@@ -54,7 +48,7 @@ class RAGEngine:
         prompt_model: Optional[str] = "gpt-4",
         top_k: Optional[int] = 5,
         threshold: Optional[float] = None,
-        logging_enabled: Optional[bool] = False,
+        openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
     ):
         """
         Initialises the RAG engine.
@@ -68,8 +62,6 @@ class RAGEngine:
             top_k: Maximum number of similar code units to retrieve. Defaults to 5.
             threshold: Minimum similarity score (0-1) required for retrieved code
                 units. Defaults to None.
-            logging_enabled: Whether to log detailed information about the RAG
-                pipeline execution. Defaults to False.
 
         Raises:
            FileNotFoundError: If the code_units_path file cannot be found.
@@ -78,7 +70,6 @@ class RAGEngine:
         self._prompt_model = prompt_model
         self._top_k = top_k
         self._threshold = threshold
-        self._logging_enabled = logging_enabled
 
         # Initialize embedder and similarity searcher
         self._embedder = CodeEmbedder(embedding_model=embedding_model)
@@ -88,7 +79,7 @@ class RAGEngine:
 
         # Initialise large LLM client. At this point, only OpenAI is available.
         if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
-            self._client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            self._client = OpenAI(api_key=openai_api_key)
         else:
             raise ValueError(f"The model {self._prompt_model} is not supported.")
 
@@ -134,13 +125,6 @@ class RAGEngine:
             top_k=self._top_k,
             threshold=self._threshold,
         )
-
-        if self._logging_enabled:
-            logging.info("Similar Code Units:\n")
-            for result in similar_code_units:
-                logging.info(f"Similarity: {result.similarity_score}")
-                logging.info(f"Code unit: {result.code_unit.name}")
-                logging.info("---")
 
         return similar_code_units
 
@@ -198,9 +182,8 @@ class RAGEngine:
         prompt += "provide a detailed answer to the question. "
         prompt += "Reference specific parts of the code where relevant.\n"
 
-        if self._logging_enabled:
-            logging.info("\nAugmented Prompt:\n")
-            logging.info(prompt)
+        logger.info("\nAugmented Prompt:\n")
+        logger.info(prompt)
 
         return prompt
 
@@ -226,8 +209,7 @@ class RAGEngine:
         )
         response_message = response.choices[0].message.content
 
-        if self._logging_enabled:
-            logging.info("\nGenerated Response:\n")
-            logging.info(response_message)
+        logger.info("\nGenerated Response:\n")
+        logger.info(response_message)
 
         return response_message

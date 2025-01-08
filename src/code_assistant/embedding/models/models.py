@@ -4,6 +4,9 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 import numpy as np
 
 from code_assistant.storage.code_store import CodeEmbedding
+from code_assistant.logging.logger import get_logger
+
+logger = get_logger(__name__)
 
 T = TypeVar("T", bound="EmbeddingModel")
 
@@ -154,7 +157,7 @@ class TransformersEmbeddingModel(EmbeddingModel):
             return CodeEmbedding(embedding / np.linalg.norm(embedding), self.model_name)
 
         except Exception as e:
-            print(f"Embedding generation error: {e}")
+            logger.error(f"Embedding generation error: {e}")
             raise
 
     @property
@@ -207,7 +210,7 @@ class OpenAIEmbeddingModel(EmbeddingModel):
             return CodeEmbedding(embedding / np.linalg.norm(embedding), self.model_name)
 
         except Exception as e:
-            print(f"OpenAI embedding generation error: {e}")
+            logger.error(f"OpenAI embedding generation error: {e}")
             raise
 
     @property

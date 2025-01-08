@@ -6,6 +6,9 @@ from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearc
 from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.logging.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class EmbedCommands:
@@ -44,7 +47,7 @@ class EmbedCommands:
             output_path = os.path.join(input_dir, f"embedded_{input_filename}")
 
         # Load code units
-        print(f"Loading code units from {input_path}")
+        logger.info(f"Loading code units from {input_path}")
         codebase = CodebaseSnapshot.from_json(Path(input_path))
 
         if openai_api_key:
@@ -56,18 +59,18 @@ class EmbedCommands:
         embedder = CodeEmbedder(embedding_model=model)
 
         # Generate embeddings
-        print("Generating embeddings...")
+        logger.info("Generating embeddings...")
         codebase_with_embeddings = embedder.embed_code_units(codebase)
 
         # Save results
-        print(f"Saving embeddings to {output_path}")
+        logger.info(f"Saving embeddings to {output_path}")
         codebase_with_embeddings.to_json(Path(output_path))
 
         # Print statistics
-        print("\nEmbedding Generation Summary:")
-        print(f"Total code units processed: {len(codebase_with_embeddings)}")
-        print(f"Embedding dimension: {embedder.embedding_dimension}")
-        print(f"Output saved to: {output_path}")
+        logger.info("\nEmbedding Generation Summary:")
+        logger.info(f"Total code units processed: {len(codebase_with_embeddings)}")
+        logger.info(f"Embedding dimension: {embedder.embedding_dimension}")
+        logger.info(f"Output saved to: {output_path}")
 
     def generate(
         self,
@@ -107,7 +110,7 @@ class EmbedCommands:
         )
 
         for result in results:
-            print(
+            logger.info(
                 f"{result.code_unit.fully_qualified_name()} - "
                 f"Similarity: {result.similarity_score}"
             )

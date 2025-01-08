@@ -1,5 +1,8 @@
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.storage.code_store import Class, CodebaseSnapshot
+from code_assistant.logging.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class CodeEmbedder:
@@ -58,6 +61,6 @@ class CodeEmbedder:
                             )
 
                 except Exception as e:
-                    print(f"Failed to embed unit {unit.name}: {e}")
+                    logger.error(f"Failed to embed unit {unit.name}: {e}")
 
         return codebase
