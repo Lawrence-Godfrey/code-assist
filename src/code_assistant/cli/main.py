@@ -1,6 +1,6 @@
 import fire
 
-from code_assistant.cli import embed, evaluate, extract, generate
+from code_assistant.cli import embed, evaluate, extract, generate, rag
 
 
 class CLI:
@@ -11,6 +11,7 @@ class CLI:
         self.embed = embed.EmbedCommands()
         self.evaluate = evaluate.EvaluateCommands()
         self.generate = generate.GenerateCommands()
+        self.rag = rag.RagCommands()
 
 
 def main():

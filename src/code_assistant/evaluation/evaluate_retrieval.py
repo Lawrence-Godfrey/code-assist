@@ -10,7 +10,10 @@ from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
+from code_assistant.logging.logger import get_logger
 from code_assistant.storage.code_store import CodebaseSnapshot
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -209,7 +212,7 @@ class MultiModelCodeRetrievalEvaluator:
         for model in self.models:
             try:
 
-                print(f"\nEvaluating model: {model.model_name}")
+                logger.info(f"\nEvaluating model: {model.model_name}")
 
                 # Initialize embedder for current model
                 embedder = CodeEmbedder(embedding_model=model)
@@ -230,37 +233,37 @@ class MultiModelCodeRetrievalEvaluator:
                 metrics_list.append(metrics)
 
             except Exception as e:
-                print(f"Error evaluating {model.model_name}: {str(e)}")
+                logger.error(f"Error evaluating {model.model_name}: {str(e)}")
                 continue
 
         return metrics_list
 
     def print_comparison(self, metrics_list: List[RetrievalMetrics]) -> None:
         """Print a comparison of metrics across all models."""
-        print("\nModel Comparison Results:")
-        print("=" * 80)
+        logger.info("\nModel Comparison Results:")
+        logger.info("=" * 80)
 
         # Print MRR comparison
-        print("\nMean Reciprocal Rank:")
+        logger.info("\nMean Reciprocal Rank:")
         for metrics in metrics_list:
-            print(f"{metrics.model_name}: {metrics.mrr:.3f}")
+            logger.info(f"{metrics.model_name}: {metrics.mrr:.3f}")
 
         # Print Precision@K comparison
-        print("\nPrecision@K:")
+        logger.info("\nPrecision@K:")
         k_values = list(metrics_list[0].precision_at_k.keys())
         for k in k_values:
-            print(f"\nP@{k}:")
+            logger.info(f"\nP@{k}:")
             for metrics in metrics_list:
-                print(f"{metrics.model_name}: {metrics.precision_at_k[k]:.3f}")
+                logger.info(f"{metrics.model_name}: {metrics.precision_at_k[k]:.3f}")
 
         # Print Mean Average Precision comparison
-        print("\nMean Average Precision:")
+        logger.info("\nMean Average Precision:")
         for metrics in metrics_list:
-            print(f"{metrics.model_name}: {metrics.mean_avg_precision:.3f}")
+            logger.info(f"{metrics.model_name}: {metrics.mean_avg_precision:.3f}")
 
         # Print similarity score analysis
-        print("\nSimilarity Score Analysis:")
+        logger.info("\nSimilarity Score Analysis:")
         for metrics in metrics_list:
-            print(f"\n{metrics.model_name}:")
-            print(f"  Correct matches: {metrics.mean_similarity_correct:.3f}")
-            print(f"  Incorrect matches: {metrics.mean_similarity_incorrect:.3f}")
+            logger.info(f"\n{metrics.model_name}:")
+            logger.info(f"  Correct matches: {metrics.mean_similarity_correct:.3f}")
+            logger.info(f"  Incorrect matches: {metrics.mean_similarity_incorrect:.3f}")
