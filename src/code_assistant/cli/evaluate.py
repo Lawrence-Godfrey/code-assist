@@ -29,9 +29,7 @@ class EvaluateCommands:
 
         code_store = JSONCodeStore(Path(codebase_path))
 
-        test_dataset = PromptCodePairDataset.from_json(
-            Path(test_data_path), code_store
-        )
+        test_dataset = PromptCodePairDataset.from_json(Path(test_data_path), code_store)
 
         models = []
         model_classes = EmbeddingModelFactory.models()

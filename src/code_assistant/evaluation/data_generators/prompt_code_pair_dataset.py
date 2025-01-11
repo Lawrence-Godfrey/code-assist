@@ -274,14 +274,14 @@ class PromptCodePairDataset:
 
         # Create validation dataset if validation ratio > 0
         if config.validation_ratio > 0:
-            val_pairs = all_pairs[train_size: train_size + val_size]
+            val_pairs = all_pairs[train_size : train_size + val_size]
             val_dataset = PromptCodePairDataset()
             for pair in val_pairs:
                 val_dataset.add_pair(pair)
             val_dataset.to_json(output_dir / "validate_prompt_code_pair_dataset.json")
             split_datasets["validation"] = val_dataset
 
-        test_pairs = all_pairs[train_size + val_size:]
+        test_pairs = all_pairs[train_size + val_size :]
         test_dataset = PromptCodePairDataset()
         for pair in test_pairs:
             test_dataset.add_pair(pair)

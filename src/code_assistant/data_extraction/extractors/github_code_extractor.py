@@ -9,12 +9,7 @@ import astor
 import git
 from git import Repo
 
-from code_assistant.storage.codebase import (
-    Class,
-    File,
-    Function,
-    Method,
-)
+from code_assistant.storage.codebase import Class, File, Function, Method
 from code_assistant.storage.stores import CodeStore
 
 

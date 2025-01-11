@@ -1,3 +1,4 @@
+import json
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -5,19 +6,17 @@ from typing import Iterator, List, Optional, Union
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
-import json
-
 from pymongo.operations import SearchIndexModel
 
+from code_assistant.logging.logger import get_logger
 from code_assistant.storage.codebase import (
+    Class,
+    CodeEmbedding,
     CodeUnit,
     File,
-    Class,
-    Method,
     Function,
-    CodeEmbedding,
+    Method,
 )
-from code_assistant.logging.logger import get_logger
 
 logger = get_logger(__name__)
 

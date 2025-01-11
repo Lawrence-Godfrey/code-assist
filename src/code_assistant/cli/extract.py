@@ -5,7 +5,7 @@ from typing import Optional
 from code_assistant.data_extraction.extractors.github_code_extractor import (
     GitHubCodeExtractor,
 )
-from code_assistant.storage.stores import MongoDBCodeStore, JSONCodeStore
+from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
 
 
 class ExtractCommands:
