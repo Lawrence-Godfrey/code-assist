@@ -2,9 +2,9 @@ from pathlib import Path
 from typing import Optional
 
 from code_assistant.rag.rag_engine import RAGEngine
-from code_assistant.storage.code_store import CodebaseSnapshot
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import get_logger, LoggingConfig
+from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -41,10 +41,10 @@ class RagCommands:
         # Load codebase
         if codebase_path:
             logger.info(f"Loading codebase from {codebase_path}")
-            codebase = CodebaseSnapshot.from_json(Path(codebase_path))
+            code_store = JSONCodeStore(Path(codebase_path))
         elif database_url:
             logger.info(f"Loading codebase from database: {database_url}")
-            codebase = CodebaseSnapshot.from_database(database_url)
+            code_store = MongoDBCodeStore(database_url)
         else:
             raise ValueError("Either codebase_path or database_url must be provided.")
 
@@ -53,7 +53,7 @@ class RagCommands:
 
         # Initialize RAG engine
         engine = RAGEngine(
-            codebase=codebase,
+            code_store=code_store,
             embedding_model=embedding_model,
             prompt_model=prompt_model,
             top_k=top_k,

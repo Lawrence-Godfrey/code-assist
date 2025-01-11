@@ -5,6 +5,7 @@ from typing import Optional
 from code_assistant.data_extraction.extractors.github_code_extractor import (
     GitHubCodeExtractor,
 )
+from code_assistant.storage.stores import MongoDBCodeStore, JSONCodeStore
 
 
 class ExtractCommands:
@@ -13,7 +14,8 @@ class ExtractCommands:
     def github(
         self,
         repo_url: str,
-        output_path: Optional[str] = "code_units.json",
+        output_path: Optional[str] = None,
+        database_url: str = "mongodb://localhost:27017/",
         max_files: Optional[int] = None,
         github_token: Optional[str] = None,
         repo_download_dir: Optional[str] = os.path.expanduser(
@@ -25,11 +27,15 @@ class ExtractCommands:
             repo_download_dir=repo_download_dir, github_token=github_token
         )
 
-        codebase = extractor.process_repository(
-            repo_url=repo_url,
-            output_path=Path(output_path).parent,
-            max_files=max_files,
-            cleanup=True,
-        )
+        if output_path:
+            code_store = JSONCodeStore(Path(output_path))
+        elif database_url:
+            code_store = MongoDBCodeStore(database_url)
+        else:
+            raise ValueError("Either output_path or database_url must be provided.")
 
-        codebase.to_json(Path(output_path))
+        extractor.process_repository(
+            repo_url=repo_url,
+            code_store=code_store,
+            max_files=max_files,
+        )

@@ -1,6 +1,7 @@
 from code_assistant.embedding.models.models import EmbeddingModel
-from code_assistant.storage.code_store import Class, CodebaseSnapshot
+from code_assistant.storage.codebase import Class
 from code_assistant.logging.logger import get_logger
+from code_assistant.storage.stores import CodeStore
 
 logger = get_logger(__name__)
 
@@ -22,19 +23,13 @@ class CodeEmbedder:
 
     def embed_code_units(
         self,
-        codebase: CodebaseSnapshot,
-    ) -> CodebaseSnapshot:
+        code_store: CodeStore,
+    ):
         """
-        Generate embeddings for a list of code units.
-
-        Args:
-            codebase (CodebaseSnapshot): Codebase snapshot containing code units
-
-        Returns:
-            Updated codebase snapshot with embedded code units.
+        Generate embeddings for a codebase.
         """
 
-        for file in codebase:
+        for file in code_store:
             for unit in file:
                 try:
                     formatted_string = (
@@ -46,6 +41,7 @@ class CodeEmbedder:
                     unit.embeddings[self.model.model_name] = (
                         self.model.generate_embedding(formatted_string)
                     )
+                    code_store.save_unit(unit)
 
                     if isinstance(unit, Class):
                         for method in unit.methods:
@@ -59,8 +55,7 @@ class CodeEmbedder:
                             method.embeddings[self.model.model_name] = (
                                 self.model.generate_embedding(formatted_string)
                             )
+                            code_store.save_unit(method)
 
                 except Exception as e:
                     logger.error(f"Failed to embed unit {unit.name}: {e}")
-
-        return codebase

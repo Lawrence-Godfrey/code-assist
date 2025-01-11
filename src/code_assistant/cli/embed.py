@@ -2,11 +2,11 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from code_assistant.embedding.code_embedder import CodeEmbedder
 from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
-from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModelFactory
-from code_assistant.storage.code_store import CodebaseSnapshot
 from code_assistant.logging.logger import get_logger
+from code_assistant.storage.stores import JSONCodeStore
 
 logger = get_logger(__name__)
 
@@ -48,28 +48,19 @@ class EmbedCommands:
 
         # Load code units
         logger.info(f"Loading code units from {input_path}")
-        codebase = CodebaseSnapshot.from_json(Path(input_path))
+        code_store = JSONCodeStore(Path(input_path))
 
-        if openai_api_key:
-            model = EmbeddingModelFactory.create(model_name, openai_api_key)
-        else:
-            model = EmbeddingModelFactory.create(model_name)
-
-        # Initialize embedder
-        embedder = CodeEmbedder(embedding_model=model)
+        model = EmbeddingModelFactory.create(model_name, openai_api_key=openai_api_key)
 
         # Generate embeddings
         logger.info("Generating embeddings...")
-        codebase_with_embeddings = embedder.embed_code_units(codebase)
-
-        # Save results
-        logger.info(f"Saving embeddings to {output_path}")
-        codebase_with_embeddings.to_json(Path(output_path))
+        code_embedder = CodeEmbedder(embedding_model=model)
+        code_embedder.embed_code_units(code_store)
 
         # Print statistics
         logger.info("\nEmbedding Generation Summary:")
-        logger.info(f"Total code units processed: {len(codebase_with_embeddings)}")
-        logger.info(f"Embedding dimension: {embedder.embedding_dimension}")
+        logger.info(f"Total code units processed: {len(code_store)}")
+        logger.info(f"Embedding dimension: {model.embedding_dimension}")
         logger.info(f"Output saved to: {output_path}")
 
     def generate(
@@ -96,15 +87,14 @@ class EmbedCommands:
         threshold: Optional[float] = None,
     ) -> None:
         """Compare a query against embedded code units."""
-        codebase = CodebaseSnapshot.from_json(Path(input_path))
+        code_store = JSONCodeStore(Path(input_path))
         embedding_model = EmbeddingModelFactory.create(model_name)
 
-        embedder = CodeEmbedder(embedding_model=embedding_model)
         searcher = EmbeddingSimilaritySearch(
-            codebase=codebase, embedding_model=embedding_model
+            code_store=code_store, embedding_model=embedding_model
         )
 
-        query_embedding = embedder.model.generate_embedding(query)
+        query_embedding = embedding_model.generate_embedding(query)
         results = searcher.find_similar(
             query_embedding=query_embedding, top_k=top_k, threshold=threshold
         )

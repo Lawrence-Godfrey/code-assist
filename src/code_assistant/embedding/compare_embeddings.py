@@ -4,7 +4,8 @@ from typing import List, Optional
 import numpy as np
 
 from code_assistant.embedding.models.models import EmbeddingModel
-from code_assistant.storage.code_store import CodebaseSnapshot, CodeEmbedding, CodeUnit
+from code_assistant.storage.codebase import CodeEmbedding, CodeUnit
+from code_assistant.storage.stores import CodeStore
 
 
 @dataclass
@@ -20,18 +21,18 @@ class SearchResult:
 
 
 class EmbeddingSimilaritySearch:
-    def __init__(self, codebase: CodebaseSnapshot, embedding_model: EmbeddingModel):
+    def __init__(self, code_store: CodeStore, embedding_model: EmbeddingModel):
         """
         Initialize the similarity search engine with code units and their embeddings.
         Each code unit should be a dictionary containing an 'embedding' key with
         the vector representation of that code unit.
 
         Args:
-            codebase: CodebaseSnapshot object containing code units and their embeddings.
+            code_store: CodeStore object for accessing code units.
             embedding_model: EmbeddingModel object used to generate the embeddings.
         """
 
-        self.codebase = codebase
+        self.code_store = code_store
         self.model = embedding_model
 
         # Validate code units and embeddings
@@ -60,7 +61,7 @@ class EmbeddingSimilaritySearch:
         """
 
         valid_units = []
-        for unit in self.codebase.iter_flat():
+        for unit in self.code_store.iter_flat():
             if unit.embeddings is not None and self.model.model_name in unit.embeddings:
                 valid_units.append(unit)
             elif enforce_valid:
@@ -161,7 +162,7 @@ class EmbeddingSimilaritySearch:
         results = []
         for idx in top_indices:
             unit_id = self.unit_ids[valid_indices[idx]]
-            code_unit = self.codebase.get_unit_by_id(unit_id)
+            code_unit = self.code_store.get_unit_by_id(unit_id)
             results.append(SearchResult(code_unit, float(similarities[idx])))
 
         return results
@@ -186,7 +187,7 @@ class EmbeddingSimilaritySearch:
             List of SearchResult objects containing matched code units and scores
         """
         # Create a mask for the specified type
-        type_mask = np.array(self.codebase.get_units_by_type(unit_type), dtype=bool)
+        type_mask = np.array(self.code_store.get_units_by_type(unit_type), dtype=bool)
 
         if not np.any(type_mask):
             return []
@@ -220,7 +221,7 @@ class EmbeddingSimilaritySearch:
 
         return [
             SearchResult(
-                self.codebase.get_unit_by_id(filtered_unit_ids[idx]),
+                self.code_store.get_unit_by_id(filtered_unit_ids[idx]),
                 float(similarities[idx]),
             )
             for idx in top_indices

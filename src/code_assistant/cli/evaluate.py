@@ -12,7 +12,7 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
 from code_assistant.evaluation.evaluate_retrieval import (
     MultiModelCodeRetrievalEvaluator,
 )
-from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.storage.stores import JSONCodeStore
 
 
 class EvaluateCommands:
@@ -26,10 +26,12 @@ class EvaluateCommands:
         openai_api_key: Optional[str] = None,
     ) -> None:
         """Evaluate retrieval performance across models."""
+
+        code_store = JSONCodeStore(Path(codebase_path))
+
         test_dataset = PromptCodePairDataset.from_json(
-            Path(test_data_path), CodebaseSnapshot.from_json(Path(codebase_path))
+            Path(test_data_path), code_store
         )
-        codebase = CodebaseSnapshot.from_json(Path(codebase_path))
 
         models = []
         model_classes = EmbeddingModelFactory.models()
@@ -43,7 +45,7 @@ class EvaluateCommands:
                 models.append(model)
 
         evaluator = MultiModelCodeRetrievalEvaluator(
-            test_dataset=test_dataset, codebase=codebase, models=models
+            test_dataset=test_dataset, code_store=code_store, models=models
         )
 
         metrics_list = evaluator.evaluate_all_models()

@@ -2,7 +2,6 @@ import ast
 import logging
 import os
 import shutil
-from os.path import expanduser
 from pathlib import Path
 from typing import List, Optional
 
@@ -10,13 +9,13 @@ import astor
 import git
 from git import Repo
 
-from code_assistant.storage.code_store import (
+from code_assistant.storage.codebase import (
     Class,
-    CodebaseSnapshot,
     File,
     Function,
     Method,
 )
+from code_assistant.storage.stores import CodeStore
 
 
 class GitHubCodeExtractor:
@@ -201,25 +200,18 @@ class GitHubCodeExtractor:
     def process_repository(
         self,
         repo_url: str,
-        output_path: Optional[Path] = Path(
-            expanduser("~/code_assist/extracted_code_units")
-        ),
+        code_store: CodeStore,
         max_files: Optional[int] = None,
-        cleanup: bool = True,
-    ) -> CodebaseSnapshot:
+    ):
         """
         Process an entire GitHub repository and extract code units.
 
         Args:
             repo_url (str): GitHub repository URL
-            output_path (str, optional): Path to save extracted code units
+            code_store (CodeStore): Storage object to save the extracted code units
             max_files (int, optional): Limit the number of files to process
-            cleanup (bool): Whether to remove the cloned repository after processing
-
-        Returns:
-            A CodebaseSnapshot containing all extracted code units
         """
-        repo_path = self.clone_repository(repo_url)
+        self.clone_repository(repo_url)
 
         python_files = self.find_python_files()
 
@@ -227,20 +219,8 @@ class GitHubCodeExtractor:
         if max_files:
             python_files = python_files[:max_files]
 
-        snapshot = CodebaseSnapshot()
         # Extract code units from all files
         for file_path in python_files:
-            snapshot.add_file(self.extract_code_units(file_path))
+            code_store.add_file(self.extract_code_units(file_path))
 
-        # Optionally save to JSON
-        if output_path:
-            output_file = os.path.join(output_path, f"{self.repo_name}_code_units.json")
-            os.makedirs(output_path, exist_ok=True)
-            snapshot.to_json(Path(output_file))
-
-        # Clean up temporary repository
-        if cleanup:
-            shutil.rmtree(repo_path)
-
-        self.logger.info(f"Extracted {len(snapshot)} code units")
-        return snapshot
+        self.logger.info(f"Extracted {len(code_store)} code units")
