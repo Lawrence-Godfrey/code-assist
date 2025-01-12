@@ -6,7 +6,7 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_generator import
     OpenAIConfig,
     OpenAIGenerator,
 )
-from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.storage.stores import JSONCodeStore
 
 
 class GenerateCommands:
@@ -23,7 +23,7 @@ class GenerateCommands:
         max_tokens: Optional[int] = 150,
     ) -> None:
         """Generate prompt-code pairs using OpenAI."""
-        codebase = CodebaseSnapshot.from_json(Path(code_units_path))
+        code_store = JSONCodeStore(Path(code_units_path))
 
         unit_types = unit_types or ["function", "method", "class"]
 
@@ -31,7 +31,7 @@ class GenerateCommands:
             output_path = Path(code_units_path).parent / "prompt_code_pairs.json"
 
         generator = OpenAIGenerator(
-            codebase=codebase,
+            code_store=code_store,
             openai_api_key=openai_api_key,
             config=OpenAIConfig(temperature=temperature, max_tokens=max_tokens),
             output_path=Path(output_path),

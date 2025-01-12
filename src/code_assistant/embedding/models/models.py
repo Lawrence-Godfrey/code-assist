@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 import numpy as np
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.code_store import CodeEmbedding
+from code_assistant.storage.codebase import CodeEmbedding
 
 logger = get_logger(__name__)
 
@@ -72,6 +72,10 @@ class EmbeddingModelFactory:
                 f"Unsupported model: {model_name}. "
                 f"Supported models are: {list(cls._models.keys())}"
             )
+
+        if kwargs.get("openai_api_key") is None:
+            kwargs.pop("openai_api_key", None)
+
         return cls._models[model_name](model_name, *args, **kwargs)
 
     @classmethod
