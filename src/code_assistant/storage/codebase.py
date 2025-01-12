@@ -169,6 +169,7 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
 
     unit_type = "file"
     filepath: Path = None
+    codebase: str = None
     _code_units: List[TopLevelCodeUnit] = field(default_factory=list)
 
     @property
@@ -184,6 +185,7 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
     def to_dict(self) -> dict:
         result = super().to_dict()
         result["filepath"] = str(self.filepath)
+        result["codebase"] = self.codebase
         result["code_units"] = [unit.to_dict() for unit in self._code_units]
         return result
 
@@ -197,6 +199,7 @@ class File(CodeUnit, Iterable[TopLevelCodeUnit]):
             docstring=data.get("docstring"),
             id=data["id"],
             filepath=Path(data["filepath"]),
+            codebase=data.get("codebase"),
             embeddings={
                 model_name: CodeEmbedding.from_dict(embedding_data)
                 for model_name, embedding_data in data["embeddings"].items()

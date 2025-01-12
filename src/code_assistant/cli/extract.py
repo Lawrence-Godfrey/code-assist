@@ -4,6 +4,7 @@ from typing import Optional
 
 from code_assistant.data_extraction.extractors.github_code_extractor import (
     GitHubCodeExtractor,
+    CodebaseExistsError,
 )
 from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
 
@@ -21,6 +22,7 @@ class ExtractCommands:
         repo_download_dir: Optional[str] = os.path.expanduser(
             "~/code_assist/github_repos"
         ),
+        overwrite: bool = False,
     ) -> None:
         """Extract code units from a GitHub repository."""
         extractor = GitHubCodeExtractor(
@@ -34,8 +36,12 @@ class ExtractCommands:
         else:
             raise ValueError("Either output_path or database_url must be provided.")
 
-        extractor.process_repository(
-            repo_url=repo_url,
-            code_store=code_store,
-            max_files=max_files,
-        )
+        try:
+            extractor.process_repository(
+                repo_url=repo_url,
+                code_store=code_store,
+                max_files=max_files,
+                overwrite=overwrite,
+            )
+        except CodebaseExistsError:
+            print("Codebase already exists. Use --overwrite to re-extract.")

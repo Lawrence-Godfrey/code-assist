@@ -13,6 +13,12 @@ from code_assistant.storage.codebase import Class, File, Function, Method
 from code_assistant.storage.stores import CodeStore
 
 
+class CodebaseExistsError(Exception):
+    """Raised when a codebase already exists in the storage."""
+
+    pass
+
+
 class GitHubCodeExtractor:
     """
     Extract code units from a GitHub repository, including private repositories.
@@ -197,6 +203,7 @@ class GitHubCodeExtractor:
         repo_url: str,
         code_store: CodeStore,
         max_files: Optional[int] = None,
+        overwrite: bool = False,
     ):
         """
         Process an entire GitHub repository and extract code units.
@@ -205,6 +212,7 @@ class GitHubCodeExtractor:
             repo_url (str): GitHub repository URL
             code_store (CodeStore): Storage object to save the extracted code units
             max_files (int, optional): Limit the number of files to process
+            overwrite (bool): Overwrite existing codebase if it exists
         """
         self.clone_repository(repo_url)
 
@@ -214,8 +222,17 @@ class GitHubCodeExtractor:
         if max_files:
             python_files = python_files[:max_files]
 
+        if overwrite:
+            print(f"Overwriting codebase {self.repo_name}")
+            code_store.delete_codebase(self.repo_name)
+        else:
+            if code_store.codebase_exists(self.repo_name):
+                raise CodebaseExistsError(f"Codebase {self.repo_name} already exists.")
+
         # Extract code units from all files
         for file_path in python_files:
-            code_store.add_file(self.extract_code_units(file_path))
+            code_store.add_file(
+                codebase=self.repo_name, file=self.extract_code_units(file_path)
+            )
 
         self.logger.info(f"Extracted {len(code_store)} code units")
