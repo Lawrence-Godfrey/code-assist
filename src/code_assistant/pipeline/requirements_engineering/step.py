@@ -10,7 +10,7 @@ from enum import Enum, auto
 from typing import Dict, List, Optional
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.pipeline.pipeline import PipelineStep
+from code_assistant.pipeline.step import PipelineStep
 
 logger = get_logger(__name__)
 
