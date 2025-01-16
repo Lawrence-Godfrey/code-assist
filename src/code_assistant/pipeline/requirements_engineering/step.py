@@ -16,34 +16,129 @@ logger = get_logger(__name__)
 
 
 class RequirementStatus(Enum):
-    """Status of a requirement validation."""
+    """
+    Status of a requirement's validation result.
+
+    Used to indicate whether a requirement is:
+    - MISSING: The requirement was not found in the input
+    - INVALID: The requirement was found but is not sufficient
+    - VALID: The requirement was found and is sufficient
+    """
     MISSING = auto()
     INVALID = auto()
     VALID = auto()
 
+
 @dataclass
 class RequirementValidation:
-    """Result of validating a requirement."""
+    """
+    Holds the validation result and explanation message for a single requirement.
+
+    Attributes:
+        status: The status of the validation (MISSING, INVALID, or VALID)
+        message: A descriptive message explaining why the requirement received this status
+    """
     status: RequirementStatus
     message: str
 
+
+class TaskType(Enum):
+    """
+    Types of tasks that the agent can perform.
+
+    Values:
+        DESIGN_DOCUMENT: Creation of design documentation
+        INVESTIGATION: Analysis and research tasks
+        IMPLEMENTATION: Code implementation tasks
+    """
+    DESIGN_DOCUMENT = "design document"
+    INVESTIGATION = "investigation"
+    IMPLEMENTATION = "implementation"
+
+
+class RiskLevel(Enum):
+    """
+    Risk levels for task implementation.
+
+    Represents the potential impact of errors in production:
+    - VERY_LOW: Minimal to no impact on system operation
+    - LOW: Minor impact, easily fixed
+    - MEDIUM: Moderate impact, requires attention
+    - HIGH: Significant impact on system operation
+    - VERY_HIGH: Critical impact, could cause system failure
+    """
+    VERY_LOW = "very low"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very high"
+
+
+class EffortLevel(Enum):
+    """
+    Effort levels for task implementation.
+
+    Similar to story points, indicates the amount of work required:
+    - VERY_LOW: Simple changes, minimal coding required
+    - LOW: Small changes, straightforward implementation
+    - MEDIUM: Moderate changes, some complexity
+    - HIGH: Significant changes, complex implementation
+    - VERY_HIGH: Major changes, highly complex implementation
+    """
+    VERY_LOW = "very low"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very high"
+
+
 @dataclass
 class RequirementsSchema:
-    """Schema for task requirements."""
-    task_type: str
+    """
+    Schema for task requirements, defining all necessary information for task execution.
+
+    Required Fields:
+        task_type: The type of task to be performed (design, investigation, implementation)
+        description: Detailed description of what needs to be done
+        dod: Definition of Done - list of acceptance criteria
+        risk: Assessment of potential production impact
+        effort: Estimated work effort required
+
+    Optional Fields:
+        focus_region: Specific parts of the codebase to focus on
+
+    Internal Fields:
+        validation_result: Results of requirements validation checks
+
+    Examples:
+        A typical implementation task might have:
+        - task_type: TaskType.IMPLEMENTATION
+        - description: "Implement error handling in the pipeline module"
+        - dod: ["Add try-catch blocks", "Log errors appropriately", "Add tests"]
+        - risk: RiskLevel.MEDIUM
+        - effort: EffortLevel.LOW
+        - focus_region: "pipeline/error_handling.py"
+    """
+    task_type: TaskType
     description: str
-    inputs: Dict[str, str] = field(default_factory=dict)
-    outputs: Dict[str, str] = field(default_factory=dict)
-    constraints: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
-    validation_result: Optional[Dict[str, RequirementValidation]] = field(default=None)
+    dod: List[str]
+    risk: RiskLevel
+    effort: EffortLevel
+    focus_region: Optional[str] = None
+    validation_result: Optional[Dict[str, RequirementValidation]] = field(
+        default=None)
 
     def is_valid(self) -> bool:
-        """Check if all requirements are valid."""
+        """
+        Check if all requirements are valid.
+
+        Returns:
+            bool: True if all requirements have passed validation, False otherwise
+        """
         if not self.validation_result:
             return False
         return all(v.status == RequirementStatus.VALID
-                  for v in self.validation_result.values())
+                   for v in self.validation_result.values())
 
 class RequirementsEngineering(PipelineStep):
     """

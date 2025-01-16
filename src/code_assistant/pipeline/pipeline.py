@@ -40,7 +40,6 @@ class Pipeline:
         context = {"prompt": prompt}
 
         try:
-            logger.info("Beginning pipeline execution")
             self._first_step.execute(context)
             return context
         except Exception as e:
