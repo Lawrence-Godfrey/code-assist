@@ -132,21 +132,30 @@ class RequirementsSchema:
     validation_result: Optional[Dict[str, RequirementValidation]] = field(
         default=None)
 
+    # Define which fields are required to move forward in the pipeline
+    _required_fields = {'task_type', 'description', 'dod', 'risk', 'effort'}
+
     def is_valid(self) -> bool:
         """
-        Check if all requirements are valid.
+        Check if all required requirements are valid.
+        Optional requirements that are missing are considered valid.
 
         Returns:
-            bool: True if all requirements have passed validation, False otherwise
+            bool: True if all required requirements have passed validation, False otherwise
         """
         if not self.validation_result:
             return False
-        return all(v.status == RequirementStatus.VALID
-                   for v in self.validation_result.values())
 
-class RequirementsEngineering(PipelineStep):
+        # Check only required fields, or optional fields that are present
+        return all(
+            v.status == RequirementStatus.VALID
+            for field, v in self.validation_result.items()
+            if field in self._required_fields or v.status != RequirementStatus.MISSING
+        )
+
+class RequirementsGatherer(PipelineStep):
     """
-    This step in the pipeline handles requirements engineering. It validates and
+    This step in the pipeline handles requirements gathering. It validates and
     processes the initial task prompt against the requirement schema.
     """
 
@@ -155,7 +164,7 @@ class RequirementsEngineering(PipelineStep):
         prompt_model: Optional[str] = "gpt-4",
         openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
     ) -> None:
-        """Initialize the requirements engineering step with an OpenAI client."""
+        """Initialize the requirements gathering step with an OpenAI client."""
         super().__init__()
 
         # Initialise large LLM client. At this point, only OpenAI is available.
@@ -284,9 +293,11 @@ class RequirementsEngineering(PipelineStep):
 
         if not schema.is_valid():
             logger.warning("Requirements validation failed:")
-            for key, validation in schema.validation_result.items():
-                if validation.status != RequirementStatus.VALID:
-                    logger.warning(f"- {key}: {validation.message}")
+            for field, validation in schema.validation_result.items():
+                # Only log warnings for required fields or optional fields that are invalid
+                if (field in schema._required_fields and validation.status != RequirementStatus.VALID) or \
+                    (field not in schema._required_fields and validation.status == RequirementStatus.INVALID):
+                    logger.warning(f"- {field}: {validation.message}")
             raise ValueError("Requirements validation failed")
 
         logger.info("Requirements engineering step completed successfully")

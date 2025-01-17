@@ -6,7 +6,7 @@ through multiple stages.
 from typing import Dict, Optional
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.pipeline.requirements_engineering.step import RequirementsEngineering
+from code_assistant.pipeline.requirements_gathering.step import RequirementsGatherer
 
 logger = get_logger(__name__)
 
@@ -18,7 +18,7 @@ class Pipeline:
 
     def __init__(self) -> None:
         """Initialise the pipeline with the defined steps."""
-        self.requirements_step = RequirementsEngineering()
+        self.requirements_step = RequirementsGatherer()
 
         # Currently we only have one step, but we'll add more and chain them
         # together as we implement them
