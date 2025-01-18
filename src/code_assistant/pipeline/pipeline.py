@@ -3,7 +3,7 @@ This module implements a pipeline for executing tasks, as requested by the user,
 in a defined set of steps. It uses the Chain of Responsibility pattern to process
 through multiple stages.
 """
-from typing import Dict, Optional
+from typing import Dict
 
 from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.requirements_gathering.step import RequirementsGatherer

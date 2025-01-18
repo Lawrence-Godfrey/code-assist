@@ -26,11 +26,5 @@ class PipelineCommands:
         logger.info(f"Starting pipeline execution for prompt:\n{prompt}")
 
         pipeline = Pipeline()
-
-        try:
-            result = pipeline.execute(prompt)
-            logger.info("Pipeline execution completed successfully")
-            logger.info(f"Result:\n{result}")
-        except Exception as e:
-            logger.error(f"Pipeline execution failed: {str(e)}")
-            raise
+        pipeline.execute(prompt)
+        logger.info("Pipeline execution completed successfully")

@@ -8,8 +8,8 @@ object that can be passed on to following steps.
 import os
 import json
 from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Dict, List, Optional
+from enum import Enum
+from typing import Dict, List, Optional, Set
 
 from openai import OpenAI
 
@@ -17,33 +17,6 @@ from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.step import PipelineStep
 
 logger = get_logger(__name__)
-
-
-class RequirementStatus(Enum):
-    """
-    Status of a requirement's validation result.
-
-    Used to indicate whether a requirement is:
-    - MISSING: The requirement was not found in the input
-    - INVALID: The requirement was found but is not sufficient
-    - VALID: The requirement was found and is sufficient
-    """
-    MISSING = auto()
-    INVALID = auto()
-    VALID = auto()
-
-
-@dataclass
-class RequirementValidation:
-    """
-    Holds the validation result and explanation message for a single requirement.
-
-    Attributes:
-        status: The status of the validation (MISSING, INVALID, or VALID)
-        message: A descriptive message explaining why the requirement received this status
-    """
-    status: RequirementStatus
-    message: str
 
 
 class TaskType(Enum):
@@ -123,35 +96,58 @@ class RequirementsSchema:
         - effort: EffortLevel.LOW
         - focus_region: "pipeline/error_handling.py"
     """
-    task_type: TaskType
-    description: str
-    dod: List[str]
-    risk: RiskLevel
-    effort: EffortLevel
+    task_type: Optional[TaskType] = None
+    description: str = ""
+    dod: List[str] = field(default_factory=list)
+    risk: Optional[RiskLevel] = None
+    effort: Optional[EffortLevel] = None
     focus_region: Optional[str] = None
-    validation_result: Optional[Dict[str, RequirementValidation]] = field(
-        default=None)
 
-    # Define which fields are required to move forward in the pipeline
-    _required_fields = {'task_type', 'description', 'dod', 'risk', 'effort'}
+    _present_fields: Set[str] = field(default_factory=set)
+    _required_fields: Set[str] = field(
+        default_factory=lambda: {'task_type', 'description', 'dod', 'risk', 'effort'}
+    )
+
+    def add_field(self, field_name: str):
+        self._present_fields.add(field_name)
 
     def is_valid(self) -> bool:
+        """Check if all required fields are present."""
+        return all(field in self._present_fields for field in self._required_fields)
+
+    def to_markdown(self, include_missing: bool = True) -> str:
         """
-        Check if all required requirements are valid.
-        Optional requirements that are missing are considered valid.
+        Convert the requirements schema to a markdown formatted string.
+
+        Args:
+            include_missing: Whether to include requirements that are missing or invalid
 
         Returns:
-            bool: True if all required requirements have passed validation, False otherwise
+            Markdown formatted string representing the requirements
         """
-        if not self.validation_result:
-            return False
+        lines = ["# Task Requirements\n"]
 
-        # Check only required fields, or optional fields that are present
-        return all(
-            v.status == RequirementStatus.VALID
-            for field, v in self.validation_result.items()
-            if field in self._required_fields or v.status != RequirementStatus.MISSING
-        )
+        if 'task_type' in self._present_fields:
+            lines.extend(["### Task Type", f"{self.task_type.value}\n"])
+
+        if 'description' in self._present_fields:
+            lines.extend(["### Description", f"{self.description}\n"])
+
+        if 'dod' in self._present_fields:
+            lines.extend(["### Definition of Done"])
+            lines.extend(f"- {item}" for item in self.dod)
+            lines.append("")
+
+        if 'risk' in self._present_fields:
+            lines.extend(["### Risk Level", f"{self.risk.value}\n"])
+
+        if 'effort' in self._present_fields:
+            lines.extend(["### Effort Level", f"{self.effort.value}\n"])
+
+        if 'focus_region' in self._present_fields:
+            lines.extend(["### Focus Region", f"{self.focus_region}\n"])
+
+        return "\n".join(lines)
 
 class RequirementsGatherer(PipelineStep):
     """
@@ -187,10 +183,13 @@ class RequirementsGatherer(PipelineStep):
 
         Returns:
             RequirementsSchema with validation results
+
+        Raises:
+            ValueError: If LLM response is invalid or requirements validation fails
         """
         analysis_prompt = f"""
-        Analyze the following task prompt and extract requirements based on our schema.
-        For each requirement, determine if it is present, missing, or invalid (insufficient information).
+        Analyze the following task prompt and extract the requirements into JSON format.
+        Only include fields where information is clearly provided in the prompt or can be easily inferred.
 
         Task Prompt: {prompt}
 
@@ -202,14 +201,14 @@ class RequirementsGatherer(PipelineStep):
         5. Effort Level (Required) - Must be one of: "very low", "low", "medium", "high", "very high"
         6. Focus Region (Optional) - Specific parts of the codebase to focus on
 
-        For each requirement, respond in the following JSON format:
+        Respond in the following JSON format, only including fields that are clearly specified:
         {{
-            "task_type": {{ "value": "...", "status": "VALID|INVALID|MISSING", "message": "..." }},
-            "description": {{ "value": "...", "status": "VALID|INVALID|MISSING", "message": "..." }},
-            "dod": {{ "value": ["..."], "status": "VALID|INVALID|MISSING", "message": "..." }},
-            "risk": {{ "value": "...", "status": "VALID|INVALID|MISSING", "message": "..." }},
-            "effort": {{ "value": "...", "status": "VALID|INVALID|MISSING", "message": "..." }},
-            "focus_region": {{ "value": "...", "status": "VALID|INVALID|MISSING", "message": "..." }}
+            "task_type": "type_value",
+            "description": "description_text",
+            "dod": ["criterion1", "criterion2"],
+            "risk": "risk_level",
+            "effort": "effort_level",
+            "focus_region": "region_path"
         }}
         
         Please ONLY respond with the JSON format above and nothing else.
@@ -217,7 +216,7 @@ class RequirementsGatherer(PipelineStep):
 
         try:
             response = self._client.chat.completions.create(
-                model="gpt-4",
+                model=self._prompt_model,
                 messages=[
                     {"role": "system",
                      "content": "You are a requirements analysis assistant. Your task is to analyze prompts and extract structured requirements."},
@@ -229,42 +228,42 @@ class RequirementsGatherer(PipelineStep):
             # Parse the LLM's JSON response
             requirements_data = json.loads(response.choices[0].message.content)
 
-            validations = {}
-            try:
-                schema = RequirementsSchema(
-                    task_type=TaskType(requirements_data["task_type"]["value"])
-                    if requirements_data["task_type"][
-                           "status"] == "VALID" else None,
-                    description=requirements_data["description"]["value"]
-                    if requirements_data["description"][
-                           "status"] == "VALID" else "",
-                    dod=requirements_data["dod"]["value"]
-                    if requirements_data["dod"]["status"] == "VALID" else [],
-                    risk=RiskLevel(requirements_data["risk"]["value"])
-                    if requirements_data["risk"]["status"] == "VALID" else None,
-                    effort=EffortLevel(requirements_data["effort"]["value"])
-                    if requirements_data["effort"][
-                           "status"] == "VALID" else None,
-                    focus_region=requirements_data["focus_region"]["value"]
-                    if requirements_data["focus_region"][
-                           "status"] == "VALID" else None
-                )
+            # Create schema with default values
+            schema = RequirementsSchema()
 
-                # Create validation results for each requirement
-                for field, data in requirements_data.items():
-                    validations[field] = RequirementValidation(
-                        status=RequirementStatus[data["status"]],
-                        message=data["message"]
-                    )
+            # Update fields and track presence
+            if "task_type" in requirements_data:
+                schema.task_type = TaskType(requirements_data["task_type"])
+                schema.add_field("task_type")
 
-            except (ValueError, KeyError) as e:
-                logger.error(
-                    f"Error creating schema from LLM response: {str(e)}")
-                raise ValueError("Invalid LLM response format")
+            if "description" in requirements_data:
+                schema.description = requirements_data["description"]
+                schema.add_field("description")
 
-            schema.validation_result = validations
+            if "dod" in requirements_data:
+                schema.dod = requirements_data["dod"]
+                schema.add_field("dod")
+
+            if "risk" in requirements_data:
+                schema.risk = RiskLevel(requirements_data["risk"])
+                schema.add_field("risk")
+
+            if "effort" in requirements_data:
+                schema.effort = EffortLevel(requirements_data["effort"])
+                schema.add_field("effort")
+
+            if "focus_region" in requirements_data:
+                schema.focus_region = requirements_data["focus_region"]
+                schema.add_field("focus_region")
+
             return schema
 
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response from LLM: {str(e)}")
+            raise ValueError("Failed to parse LLM response")
+        except ValueError as e:
+            logger.error(f"Invalid enum value in LLM response: {str(e)}")
+            raise ValueError("Invalid requirement value in LLM response")
         except Exception as e:
             logger.error(f"Error during requirements validation: {str(e)}")
             raise ValueError(f"Requirements validation failed: {str(e)}")
@@ -287,18 +286,16 @@ class RequirementsGatherer(PipelineStep):
 
         # Validate requirements
         schema = self._validate_requirements(prompt)
-
-        # Add schema to context
         context["requirements_schema"] = schema
 
-        if not schema.is_valid():
-            logger.warning("Requirements validation failed:")
-            for field, validation in schema.validation_result.items():
-                # Only log warnings for required fields or optional fields that are invalid
-                if (field in schema._required_fields and validation.status != RequirementStatus.VALID) or \
-                    (field not in schema._required_fields and validation.status == RequirementStatus.INVALID):
-                    logger.warning(f"- {field}: {validation.message}")
-            raise ValueError("Requirements validation failed")
+        # Display the markdown
+        from rich.console import Console
+        from rich.markdown import Markdown
 
-        logger.info("Requirements engineering step completed successfully")
+        console = Console()
+        markdown_str = schema.to_markdown()
+        console.print("\nTask Requirements Analysis:")
+        console.print("=" * 50)
+        console.print(Markdown(markdown_str))
+
         return self.execute_next(context)
