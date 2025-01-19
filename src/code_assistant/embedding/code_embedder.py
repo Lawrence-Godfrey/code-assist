@@ -1,6 +1,6 @@
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.codebase import Class
+from code_assistant.storage.codebase import Method
 from code_assistant.storage.stores import CodeStore
 
 logger = get_logger(__name__)
@@ -24,38 +24,39 @@ class CodeEmbedder:
     def embed_code_units(
         self,
         code_store: CodeStore,
-    ):
+    ) -> int:
         """
         Generate embeddings for a codebase.
+
+        Args:
+            code_store (CodeStore): Store containing code units to embed
+
+        Returns:
+            Number of code units processed
         """
 
-        for file in code_store:
-            for unit in file:
-                try:
-                    formatted_string = (
-                        f"type: {unit.unit_type}, "
-                        f"name: {unit.name}, "
-                        f"filepath: {unit.file.filepath}, "
-                        f"source_code: {unit.source_code}"
-                    )
-                    unit.embeddings[self.model.model_name] = (
-                        self.model.generate_embedding(formatted_string)
-                    )
-                    code_store.save_unit(unit)
+        processed_units = 0
 
-                    if isinstance(unit, Class):
-                        for method in unit.methods:
-                            formatted_string = (
-                                f"type: {method.unit_type}, "
-                                f"filepath: {method.class_ref.file.filepath}, "
-                                f"class: {method.class_ref.name}, "
-                                f"name: {method.name}, "
-                                f"source_code: {method.source_code}"
-                            )
-                            method.embeddings[self.model.model_name] = (
-                                self.model.generate_embedding(formatted_string)
-                            )
-                            code_store.save_unit(method)
+        for unit in code_store:
+            try:
+                formatted_string = (
+                    f"type: {unit.unit_type}, "
+                    f"name: {unit.name}, "
+                    f"filepath: {unit.filepath}, "
+                    f"source_code: {unit.source_code}"
+                )
+                if isinstance(unit, Method):
+                    formatted_string += f"\nclassname: {unit.classname}"
 
-                except Exception as e:
-                    logger.error(f"Failed to embed unit {unit.name}: {e}")
+                unit.embeddings[self.model.model_name] = self.model.generate_embedding(
+                    formatted_string
+                )
+
+                code_store.save_unit(unit)
+
+                processed_units += 1
+
+            except Exception as e:
+                logger.error(f"Failed to embed unit {unit.name}: {e}")
+
+        return processed_units

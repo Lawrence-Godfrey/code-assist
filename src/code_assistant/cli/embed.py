@@ -6,7 +6,7 @@ from code_assistant.embedding.code_embedder import CodeEmbedder
 from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
+from code_assistant.storage.stores import CodeStore, JSONCodeStore, MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -16,6 +16,7 @@ class EmbedCommands:
 
     def _process_embeddings(
         self,
+        codebase: str,
         input_path: Optional[str] = None,
         database_url: str = "mongodb://localhost:27017/",
         model_name: str = "jinaai/jina-embeddings-v3",
@@ -25,6 +26,7 @@ class EmbedCommands:
         Generate embeddings for code units from a JSON file.
 
         Args:
+            codebase: Name of the codebase to embed.
             input_path: Path to the JSON file containing code units
                              (defaults to 'code_units.json' in current directory)
             database_url: URL for MongoDB database to store code units
@@ -32,22 +34,22 @@ class EmbedCommands:
             openai_api_key: OpenAI API key for OpenAI models
         """
 
-        code_store = self._setup_code_store(input_path, database_url)
+        code_store = self._setup_code_store(codebase, input_path, database_url)
 
         model = EmbeddingModelFactory.create(model_name, openai_api_key=openai_api_key)
 
         # Generate embeddings
         logger.info("Generating embeddings...")
         code_embedder = CodeEmbedder(embedding_model=model)
-        code_embedder.embed_code_units(code_store)
+        units_processed = code_embedder.embed_code_units(code_store)
 
         # Print statistics
-        logger.info("\nEmbedding Generation Summary:")
-        logger.info(f"Total code units processed: {len(code_store)}")
+        logger.info(f"Total code units processed: {units_processed}")
         logger.info(f"Embedding dimension: {model.embedding_dimension}")
 
     def generate(
         self,
+        codebase: str,
         input_path: Optional[str] = None,
         database_url: str = "mongodb://localhost:27017/",
         model_name: str = "jinaai/jina-embeddings-v3",
@@ -55,6 +57,7 @@ class EmbedCommands:
     ) -> None:
         """Generate embeddings for code units."""
         self._process_embeddings(
+            codebase=codebase,
             input_path=input_path,
             database_url=database_url,
             model_name=model_name,
@@ -63,6 +66,7 @@ class EmbedCommands:
 
     def compare(
         self,
+        codebase: str,
         query: str,
         input_path: Optional[str] = None,
         database_url: str = "mongodb://localhost:27017/",
@@ -72,7 +76,7 @@ class EmbedCommands:
     ) -> None:
         """Compare a query against embedded code units."""
 
-        code_store = self._setup_code_store(input_path, database_url)
+        code_store = self._setup_code_store(codebase, input_path, database_url)
 
         embedding_model = EmbeddingModelFactory.create(model_name)
 
@@ -81,6 +85,8 @@ class EmbedCommands:
         )
 
         query_embedding = embedding_model.generate_embedding(query)
+
+        results = code_store.vector_search(query_embedding)
         results = searcher.find_similar(
             query_embedding=query_embedding, top_k=top_k, threshold=threshold
         )
@@ -93,9 +99,10 @@ class EmbedCommands:
 
     def _setup_code_store(
         self,
+        codebase: str,
         input_path: Optional[str] = None,
         database_url: str = "mongodb://localhost:27017/",
-    ) -> JSONCodeStore:
+    ) -> CodeStore:
         if input_path:
             input_path = os.path.abspath(input_path)
             if not os.path.exists(input_path):
@@ -105,9 +112,14 @@ class EmbedCommands:
                 )
 
             logger.info(f"Loading code units from {input_path}")
-            code_store = JSONCodeStore(Path(input_path))
+            code_store = JSONCodeStore(codebase=codebase, filepath=Path(input_path))
         else:
             logger.info("Loading code units from MongoDB database")
-            code_store = MongoDBCodeStore(database_url)
+            code_store = MongoDBCodeStore(
+                codebase=codebase, connection_string=database_url
+            )
+
+        if not code_store.codebase_exists():
+            raise ValueError(f"Codebase {codebase} does not exist.")
 
         return code_store

@@ -2,12 +2,16 @@ import json
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Union
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.operations import SearchIndexModel
+from pymongo.results import DeleteResult
+from pymongo.synchronous.command_cursor import CommandCursor
+from pymongo.synchronous.cursor import Cursor
 
+from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.codebase import (
     Class,
@@ -24,13 +28,16 @@ logger = get_logger(__name__)
 class CodeStore(ABC):
     """Abstract base class for different storage backends."""
 
+    def __init__(self, codebase: str):
+        self.codebase = codebase
+
     @abstractmethod
-    def codebase_exists(self, codebase_name: str) -> bool:
+    def codebase_exists(self) -> bool:
         """Check if a codebase has already been loaded."""
         pass
 
     @abstractmethod
-    def delete_codebase(self, codebase_name: str) -> None:
+    def delete_codebase(self) -> None:
         """Delete all files associated with a codebase."""
         pass
 
@@ -77,24 +84,24 @@ class CodeStore(ABC):
         """
         pass
 
-    def add_file(self, codebase: str, file: File) -> None:
-        """Add a file to the codebase snapshot."""
-        file.codebase = codebase
-        self.save_unit(file)
-
-    def __iter__(self) -> Iterator[File]:
-        """Iterates through all files."""
-        return self.iter_files()
+    def __iter__(self) -> Iterator[CodeUnit]:
+        """Iterates through all code units."""
+        return self.iter_flat()
 
     def iter_flat(self) -> Iterator[CodeUnit]:
         """Iterate through all units."""
+        yield from self.iter_files()
         yield from self.iter_classes()
         yield from self.iter_methods()
         yield from self.iter_functions()
 
     @abstractmethod
     def vector_search(
-        self, vector: CodeEmbedding, top_k: int = 5, threshold: Optional[float] = None
+        self,
+        embedding_model: EmbeddingModel,
+        embedding: CodeEmbedding,
+        top_k: int = 5,
+        threshold: Optional[float] = None,
     ) -> List[CodeUnit]:
         """
         Find similar code units using vector similarity search.
@@ -106,9 +113,11 @@ class CodeStore(ABC):
 class JSONCodeStore(CodeStore):
     """Implementation of Storage using JSON files."""
 
-    def __init__(self, filepath: Path):
+    def __init__(self, codebase: str, filepath: Path):
 
         # Must be a json file
+        super().__init__(codebase)
+
         if filepath.suffix != ".json":
             raise ValueError(f"Invalid file type: {filepath}. Must be a JSON file.")
 
@@ -190,15 +199,15 @@ class JSONCodeStore(CodeStore):
                     results.append(unit)
         return results
 
-    def codebase_exists(self, codebase_name: str) -> bool:
+    def codebase_exists(self) -> bool:
         """Check if a codebase exists in the JSON store."""
         self._load_cache()
-        return any(file.codebase == codebase_name for file in self._cache)
+        return any(file.codebase == self.codebase for file in self._cache)
 
-    def delete_codebase(self, codebase_name: str) -> None:
+    def delete_codebase(self) -> None:
         """Delete all files from a specific codebase."""
         self._load_cache()
-        self._cache = [file for file in self._cache if file.codebase != codebase_name]
+        self._cache = [file for file in self._cache if file.codebase != self.codebase]
         # Save updated cache
         with open(self.filepath, "w") as f:
             json.dump([file.to_dict() for file in self._cache], f, indent=2)
@@ -229,7 +238,11 @@ class JSONCodeStore(CodeStore):
         return sum(len(file) for file in self._cache)
 
     def vector_search(
-        self, vector: CodeEmbedding, top_k: int = 5, threshold: Optional[float] = None
+        self,
+        embedding_model: EmbeddingModel,
+        embedding: CodeEmbedding,
+        top_k: int = 5,
+        threshold: Optional[float] = None,
     ) -> List[CodeUnit]:
         """Basic vector search implementation using in-memory computation."""
         # TODO
@@ -256,27 +269,160 @@ class DatabaseCodeStore(CodeStore):
         pass
 
 
+class CodebaseFilteredCollection:
+    """A wrapper around pymongo.Collection that automatically filters by codebase."""
+
+    def __init__(self, collection: Collection, codebase: Optional[str] = None):
+        """
+        Initialize the filtered collection.
+
+        Args:
+            collection: The underlying MongoDB collection
+            codebase: The codebase to filter by (if None, no filtering is applied)
+        """
+        self._collection = collection
+        self._codebase = codebase
+
+    def _add_codebase_filter(self, filter_dict: Optional[Dict] = None) -> Dict:
+        """Add codebase filter to the query if codebase is set."""
+        if not filter_dict:
+            filter_dict = {}
+
+        if self._codebase is not None:
+            filter_dict["codebase"] = self._codebase
+
+        return filter_dict
+
+    def _get_projection(
+        self, projection: Optional[Dict] = None, include_db_id=False
+    ) -> Optional[Dict]:
+        """
+        Create projection dict that excludes _id by default unless include_db_id is True.
+
+        Args:
+            projection: Optional projection dict to merge with _id setting
+
+        Returns:
+            Updated projection dict or None if no projection needed
+        """
+        if projection is None and not include_db_id:
+            return {"_id": 0}
+        elif not include_db_id:
+            projection = dict(projection)  # Create copy to avoid modifying original
+            projection["_id"] = 0
+        return projection
+
+    def find(
+        self, filter_dict: Optional[Dict] = None, include_db_id=False, *args, **kwargs
+    ) -> Cursor:
+        """Override find to include codebase filter."""
+        return self._collection.find(
+            self._add_codebase_filter(filter_dict),
+            self._get_projection(kwargs.get("projection"), include_db_id),
+            *args,
+            **kwargs,
+        )
+
+    def find_one(
+        self, filter_dict: Optional[Dict] = None, include_db_id=False, *args, **kwargs
+    ) -> Optional[Dict]:
+        """Override find_one to include codebase filter."""
+        return self._collection.find_one(
+            self._add_codebase_filter(filter_dict),
+            self._get_projection(kwargs.get("projection"), include_db_id),
+            *args,
+            **kwargs,
+        )
+
+    def count_documents(
+        self, filter_dict: Optional[Dict] = None, *args, **kwargs
+    ) -> int:
+        """Override count_documents to include codebase filter."""
+        return self._collection.count_documents(
+            self._add_codebase_filter(filter_dict), *args, **kwargs
+        )
+
+    def delete_many(
+        self, filter_dict: Optional[Dict] = None, *args, **kwargs
+    ) -> DeleteResult:
+        """Override delete_many to include codebase filter."""
+        return self._collection.delete_many(
+            self._add_codebase_filter(filter_dict), *args, **kwargs
+        )
+
+    def aggregate(
+        self, pipeline: List[Dict], *args, **kwargs
+    ) -> CommandCursor[Mapping[str, Any] | Any]:
+        """Override aggregate to include codebase filter in $match stage."""
+        if self._codebase is not None:
+            # Add codebase filter as first stage if pipeline doesn't start with $match
+            if not pipeline or "$match" not in pipeline[0]:
+                pipeline.insert(0, {"$match": {"codebase": self._codebase}})
+            # Add to existing $match stage if it exists
+            elif "$match" in pipeline[0]:
+                pipeline[0]["$match"]["codebase"] = self._codebase
+
+        return self._collection.aggregate(pipeline, *args, **kwargs)
+
+    def replace_one(self, filter_dict: Dict, replacement: Dict, *args, **kwargs) -> Any:
+        """Override replace_one to include codebase filter and set codebase in document."""
+        if self._codebase is not None:
+            filter_dict = self._add_codebase_filter(filter_dict)
+            replacement["codebase"] = self._codebase
+
+        return self._collection.replace_one(filter_dict, replacement, *args, **kwargs)
+
+    def insert_one(self, document: Dict, *args, **kwargs) -> Any:
+        """Override insert_one to set codebase in document."""
+        if self._codebase is not None:
+            document["codebase"] = self._codebase
+
+        return self._collection.insert_one(document, *args, **kwargs)
+
+    def create_search_index(self, *args, **kwargs) -> str:
+        """Pass through create_search_index to the underlying collection."""
+        return self._collection.create_search_index(*args, **kwargs)
+
+    def list_search_indexes(self, *args, **kwargs) -> CommandCursor[Mapping[str, Any]]:
+        """Pass through list_search_indexes to the underlying collection."""
+        return self._collection.list_search_indexes(*args, **kwargs)
+
+    def create_index(self, *args, **kwargs) -> str:
+        """Pass through create_index to the underlying collection."""
+        return self._collection.create_index(*args, **kwargs)
+
+    @property
+    def name(self) -> str:
+        """Get the name of the underlying collection."""
+        return self._collection.name
+
+
 class MongoDBCodeStore(DatabaseCodeStore):
     """Implementation of Storage using MongoDB."""
 
-    def __init__(self, connection_string: str, database: str = "code_assistant"):
+    def __init__(
+        self, codebase: str, connection_string: str, database: str = "code_assistant"
+    ):
+        super().__init__(codebase)
+
         self.client = MongoClient(connection_string)
         self.db = self.client[database]
+
+        # Single collection for all code units
+        self.code_units: CodebaseFilteredCollection = CodebaseFilteredCollection(
+            self.db.code_units
+        )
+
         self._setup_indexes()
 
     def _setup_indexes(self) -> None:
         """Setup MongoDB collection with proper indexes."""
-
-        # Single collection for all code units
-        self.code_units: Collection = self.db.code_units
 
         # Create indexes
         self.code_units.create_index("id", unique=True)
         self.code_units.create_index("unit_type")
         self.code_units.create_index("codebase")
         self.code_units.create_index([("unit_type", 1), ("codebase", 1)])
-        self.code_units.create_index("parent_file")
-        self.code_units.create_index("parent_class")
 
     def _ensure_vector_index(self, model_name: str, dimensions: int) -> None:
         """
@@ -329,46 +475,60 @@ class MongoDBCodeStore(DatabaseCodeStore):
                     f"Could not create vector search index for {model_name}: {str(e)}"
                 )
 
-    def _convert_to_unit(self, data: dict) -> Optional[CodeUnit]:
-        """Convert MongoDB document back to appropriate CodeUnit type."""
-        if not data:
-            return None
-
-        return CodeUnit.from_dict(data)
-
     def save_unit(self, unit: CodeUnit) -> None:
-        """Save a unit to MongoDB collection."""
+        """
+        Save or update a unit in MongoDB collection.
 
-        if isinstance(unit, File):
+        If the unit already exists (by ID or name+filepath), only update that unit
+        without modifying its sub-units. If it's a new unit, save it and all sub-units.
+
+        Args:
+            unit: CodeUnit to save/update (File, Class, Method, or Function)
+        """
+        # Check if unit exists by ID first
+        existing_unit = self.code_units.find_one({"id": unit.id})
+
+        if existing_unit:
+            # Unit exists by ID - just update the unit itself
             unit_dict = unit.to_dict()
-            unit_dict.pop("code_units", None)  # Remove nested code units
-            db_file = self.code_units.replace_one(
-                {"id": unit.id}, unit_dict, upsert=True
-            )
+            # Remove sub-units to prevent updating them
+            unit_dict.pop("code_units", None)
+            unit_dict.pop("methods", None)
+            self.code_units.replace_one({"id": unit.id}, unit_dict)
+            return
 
-            for code_unit in unit.code_units:
-                code_unit_dict = code_unit.to_dict()
-                code_unit_dict["parent_file"] = db_file.upserted_id
-                code_unit_dict.pop("methods", None)
+        # If no match by ID, check for existing unit by type-specific criteria
+        search_criteria = {
+            "unit_type": unit.unit_type,
+            "name": unit.name,
+            "filepath": str(unit.filepath),
+        }
 
-                db_code_unit = self.code_units.replace_one(
-                    {"id": code_unit.id}, code_unit_dict, upsert=True
-                )
+        if isinstance(unit, Method):
+            search_criteria["classname"] = unit.classname
 
-                if isinstance(code_unit, Class):
-                    for method in code_unit.methods:
-                        method_dict = method.to_dict()
-                        method_dict["parent_class"] = db_code_unit.upserted_id
-                        self.code_units.replace_one(
-                            {"id": method.id}, method_dict, upsert=True
-                        )
+        existing_unit = self.code_units.find_one(search_criteria)
+
+        unit_dict = unit.to_dict()
+
+        # Remove sub-units to prevent updating them
+        unit_dict.pop("code_units", None)
+        unit_dict.pop("methods", None)
+
+        # Update the existing unit, or insert a new one
+        self.code_units.replace_one(search_criteria, unit_dict, upsert=True)
+
+        if not existing_unit:
+            # If new unit, save all sub-units
+            for sub_unit in unit:
+                self.save_unit(sub_unit)
 
     def get_unit_by_id(self, unit_id: str) -> Optional[CodeUnit]:
         """
         Find a document by ID in MongoDB collection.
         This currently only works for files, since methods, classes and functions are within files
         """
-        return self._convert_to_unit(self.code_units.find_one({"id": unit_id}))
+        return CodeUnit.from_dict(self.code_units.find_one({"id": unit_id}))
 
     def get_units_by_type(self, unit_type: Union[str, List[str]]) -> List[CodeUnit]:
         """Get all code units of specified type(s)."""
@@ -377,80 +537,43 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
         results = []
         for doc in self.code_units.find({"unit_type": {"$in": unit_type}}):
-            if unit := self._convert_to_unit(doc):
+            if unit := CodeUnit.from_dict(doc):
                 results.append(unit)
         return results
 
-    def delete_codebase(self, codebase_name: str) -> None:
+    def delete_codebase(self) -> None:
         """Delete all files associated with a codebase."""
-        # First find all documents with this codebase name
-        files = list(self.code_units.find({"codebase": codebase_name}))
-        print(files)
-        # Then find all nested documents (methods, classes) and delete them
-        classes = list(
-            self.code_units.find(
-                {
-                    "parent_file": {"$in": [file["_id"] for file in files]},
-                    "unit_type": "class",
-                }
-            )
-        )
-        functions = list(
-            self.code_units.find(
-                {
-                    "parent_file": {"$in": [file["_id"] for file in files]},
-                    "unit_type": "function",
-                }
-            )
-        )
-        print(f"functions: {len(list(functions))}")
-        self.code_units.delete_many(
-            {"_id": {"$in": [func["_id"] for func in functions]}}
-        )
-        print(f"file ids: {[file['_id'] for file in files]}")
-        print(f"file ids: {[file['_id'] for file in files]}")
-        print(f"Classes: {len(list(classes))}")
-        methods = list(
-            self.code_units.find(
-                {"parent_class": {"$in": [cls["_id"] for cls in classes]}}
-            )
-        )
-        print(f"Methods: {len(list(methods))}")
-        # Delete all nested documents first
-        self.code_units.delete_many(
-            {"_id": {"$in": [method["_id"] for method in methods]}}
-        )
-        self.code_units.delete_many({"_id": {"$in": [cls["_id"] for cls in classes]}})
-        # Delete the files
-        self.code_units.delete_many({"_id": {"$in": [file["_id"] for file in files]}})
-        logger.info(f"Deleted codebase {codebase_name}")
+        # Delete all documents
+        self.code_units.delete_many()
 
-    def codebase_exists(self, codebase_name: str) -> bool:
-        """Check if a codebase has already been loaded."""
-        return self.code_units.count_documents({"codebase": codebase_name}) > 0
+        logger.info(f"Deleted codebase {self.codebase}")
+
+    def codebase_exists(self) -> bool:
+        """Check if a codebase exists in the MongoDB collection."""
+        return self.code_units.count_documents({}) > 0
 
     def iter_files(self) -> Iterator[File]:
         """Iterate through all files."""
         for doc in self.code_units.find({"unit_type": "file"}):
-            if file := self._convert_to_unit(doc):
+            if file := CodeUnit.from_dict(doc):
                 yield file
 
     def iter_classes(self) -> Iterator[Class]:
         """Iterate through all classes."""
         for doc in self.code_units.find({"unit_type": "class"}):
-            if cls := self._convert_to_unit(doc):
+            if cls := CodeUnit.from_dict(doc):
                 yield cls
 
     def iter_methods(self) -> Iterator[Method]:
         """Iterate through all methods."""
         for doc in self.code_units.find({"unit_type": "method"}):
-            if method := self._convert_to_unit(doc):
+            if method := CodeUnit.from_dict(doc):
                 yield method
 
     def iter_functions(self) -> Iterator[Function]:
         """Iterate through all standalone functions."""
         for doc in self.code_units.find({"unit_type": "function"}):
-            if func := self._convert_to_unit(doc):
+            if func := CodeUnit.from_dict(doc):
                 yield func
 
     def __len__(self) -> int:
@@ -459,6 +582,7 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
     def vector_search(
         self,
+        embedding_model: EmbeddingModel,
         embedding: CodeEmbedding,
         top_k: int = 5,
         threshold: Optional[float] = None,
@@ -486,7 +610,7 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
         results = []
         for doc in self.code_units.aggregate(pipeline):
-            if unit := self._convert_to_unit(doc):
+            if unit := CodeUnit.from_dict(doc):
                 results.append(unit)
 
         return results

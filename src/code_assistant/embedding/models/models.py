@@ -186,19 +186,19 @@ class OpenAIEmbeddingModel(EmbeddingModel):
         "text-embedding-ada-002": 1536,
     }
 
-    def __init__(self, model_name: str, api_key: str):
+    def __init__(self, model_name: str, openai_api_key: str):
         """
         Initialize the OpenAI embedding model.
 
         Args:
             model_name: Name of the OpenAI embedding model
-            api_key: OpenAI API key
+            openai_api_key: OpenAI API key
         """
         from openai import OpenAI
 
         self.model_name = model_name
         self._embedding_dimension = self.MODELS[model_name]
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=openai_api_key)
 
     def generate_embedding(self, text: str) -> CodeEmbedding:
         """Generate an embedding vector for the given text."""

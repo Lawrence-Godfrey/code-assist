@@ -1,16 +1,82 @@
 import ast
 import logging
 import os
+import re
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 import astor
 import git
-from git import Repo
+from git import Repo as GitRepo
 
+from code_assistant.logging.logger import get_logger
 from code_assistant.storage.codebase import Class, File, Function, Method
 from code_assistant.storage.stores import CodeStore
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class Repo:
+    """Represents a repository with its metadata and local clone."""
+
+    url: str
+    name: str
+    owner: str
+    local_path: Path
+    default_branch: str
+    description: Optional[str] = None
+
+    @classmethod
+    def from_url(cls, url: str, local_path: Path) -> "Repo":
+        """
+        Create a Repo instance from a GitHub URL.
+
+        Args:
+            url: GitHub repository URL
+            local_path: Path where repository is/will be cloned
+
+        Returns:
+            Repo instance with parsed metadata
+
+        Examples:
+            >>> repo = Repo.from_url("https://github.com/owner/repo", Path("/tmp/repos"))
+            >>> repo.name
+            'repo'
+            >>> repo.owner
+            'owner'
+        """
+        # Parse URL to extract owner and repo name
+        parsed = urlparse(url)
+        path_parts = parsed.path.strip("/").split("/")
+
+        if len(path_parts) < 2:
+            raise ValueError(f"Invalid GitHub URL format: {url}")
+
+        owner, name = path_parts[:2]
+
+        # Remove .git suffix if present
+        name = re.sub(r"\.git$", "", name)
+
+        return cls(
+            url=url,
+            name=name,
+            owner=owner,
+            local_path=local_path / name,
+            default_branch="main",  # Will be updated after cloning
+        )
+
+    @property
+    def full_name(self) -> str:
+        """Get the full repository name (owner/repo)."""
+        return f"{self.owner}/{self.name}"
+
+    def is_cloned(self) -> bool:
+        """Check if repository is already cloned locally."""
+        return self.local_path.exists() and self.local_path.is_dir()
 
 
 class CodebaseExistsError(Exception):
@@ -37,10 +103,8 @@ class GitHubCodeExtractor:
             github_token (str, optional): GitHub Personal Access Token for private repo access
         """
         # Ensure temp directory exists
-        self.repo_download_dir = repo_download_dir
-        os.makedirs(repo_download_dir, exist_ok=True)
-        self.repo_path: Optional[str] = None
-        self.repo_name: Optional[str] = None
+        self.repo_download_dir = Path(repo_download_dir)
+        self.repo_download_dir.mkdir(parents=True, exist_ok=True)
 
         self.github_token = github_token
 
@@ -68,7 +132,7 @@ class GitHubCodeExtractor:
         # Construct authenticated URL
         return f"https://{self.github_token}@github.com/{repo_path}"
 
-    def clone_repository(self, repo_url: str) -> str:
+    def clone_repository(self, repo_url: str) -> Repo:
         """
         Clone a GitHub repository to a local directory, supporting private repos.
 
@@ -76,31 +140,31 @@ class GitHubCodeExtractor:
             repo_url (str): GitHub repository URL
 
         Returns:
-            str: Path to the cloned repository
+            Repo: Repository object with local path and metadata
         """
         try:
-            # Generate a safe directory name from the repo URL
-            self.repo_name = repo_url.split("/")[-1].replace(".git", "")
-            self.repo_path = os.path.join(self.repo_download_dir, self.repo_name)
+            # Create Repo object from URL
+            repo = Repo.from_url(repo_url, self.repo_download_dir)
 
-            if os.path.exists(self.repo_path):
-                shutil.rmtree(self.repo_path)
+            # Clear existing clone if present
+            if repo.is_cloned():
+                shutil.rmtree(repo.local_path)
 
             auth_url = self._get_authenticated_repo_url(repo_url)
 
             self.logger.info(f"Cloning repository: {repo_url}")
 
             # Use custom clone method to handle authentication
-            Repo.clone_from(
+            GitRepo.clone_from(
                 auth_url,
-                self.repo_path,
+                repo.local_path,
                 env={
                     # Disable Git's credential helper to prevent hanging
                     "GIT_TERMINAL_PROMPT": "0"
                 },
             )
 
-            return self.repo_path
+            return repo
 
         except git.GitCommandError as e:
             # Provide more detailed error handling
@@ -116,30 +180,34 @@ class GitHubCodeExtractor:
                 self.logger.error(f"Repository cloning failed: {e}")
             raise
 
-    def find_python_files(self) -> List[str]:
+    def find_python_files(self, repo: Repo) -> List[Path]:
         """
         Recursively find all Python files in the repository.
+
+        Args:
+            repo (Repo): Repository object
 
         Returns:
             List of paths to Python files
         """
         python_files = []
 
-        for root, _, files in os.walk(self.repo_path):
+        for root, _, files in os.walk(repo.local_path):
             for file in files:
                 if file.endswith(".py"):
                     full_path = os.path.join(root, file)
-                    python_files.append(full_path)
+                    python_files.append(Path(full_path))
 
         self.logger.info(f"Found {len(python_files)} Python files")
         return python_files
 
-    def extract_code_units(self, file_path: str) -> File:
+    def extract_code_units(self, file_path: Path, repo: Repo) -> File:
         """
         Extract methods, classes, and functions from a Python file.
 
         Args:
-            file_path (str): Path to a Python source file
+            file_path: Path to a Python source file
+            repo: Repository object
 
         Returns:
             A File object containing code units
@@ -151,11 +219,12 @@ class GitHubCodeExtractor:
             tree = ast.parse(file_content)
 
             # Get the file path relative to the repository root.
-            file_path_relative = os.path.relpath(file_path, self.repo_path)
+            file_path_relative = os.path.relpath(file_path, repo.local_path)
 
             file = File(
                 name=os.path.basename(file_path),
                 filepath=Path(file_path_relative),
+                codebase=repo.name,
                 source_code=file_content,
             )
 
@@ -166,6 +235,8 @@ class GitHubCodeExtractor:
                         name=node.name,
                         source_code=astor.to_source(node),
                         docstring=ast.get_docstring(node) or "",
+                        codebase=repo.name,
+                        filepath=file_path_relative,
                     )
                     for method in node.body:
                         if isinstance(method, ast.FunctionDef):
@@ -174,6 +245,9 @@ class GitHubCodeExtractor:
                                     name=method.name,
                                     source_code=astor.to_source(method),
                                     docstring=ast.get_docstring(method) or "",
+                                    codebase=repo.name,
+                                    filepath=file_path_relative,
+                                    classname=cls.name,
                                 )
                             )
 
@@ -186,6 +260,8 @@ class GitHubCodeExtractor:
                             name=node.name,
                             source_code=astor.to_source(node),
                             docstring=ast.get_docstring(node) or "",
+                            codebase=repo.name,
+                            filepath=file_path_relative,
                         )
                     )
 
@@ -200,7 +276,7 @@ class GitHubCodeExtractor:
 
     def process_repository(
         self,
-        repo_url: str,
+        repo: Repo,
         code_store: CodeStore,
         max_files: Optional[int] = None,
         overwrite: bool = False,
@@ -209,30 +285,27 @@ class GitHubCodeExtractor:
         Process an entire GitHub repository and extract code units.
 
         Args:
-            repo_url (str): GitHub repository URL
-            code_store (CodeStore): Storage object to save the extracted code units
-            max_files (int, optional): Limit the number of files to process
-            overwrite (bool): Overwrite existing codebase if it exists
+            repo: The repository to process.
+            code_store: Storage object to save the extracted code units
+            max_files: Limit the number of files to process
+            overwrite: Overwrite existing codebase if it exists
         """
-        self.clone_repository(repo_url)
 
-        python_files = self.find_python_files()
+        python_files = self.find_python_files(repo)
 
         # Optional: Limit number of files
         if max_files:
             python_files = python_files[:max_files]
 
         if overwrite:
-            print(f"Overwriting codebase {self.repo_name}")
-            code_store.delete_codebase(self.repo_name)
+            logger.info(f"Overwriting codebase {repo.name}")
+            code_store.delete_codebase()
         else:
-            if code_store.codebase_exists(self.repo_name):
-                raise CodebaseExistsError(f"Codebase {self.repo_name} already exists.")
+            if code_store.codebase_exists():
+                raise CodebaseExistsError(f"Codebase {repo.name} already exists.")
 
         # Extract code units from all files
         for file_path in python_files:
-            code_store.add_file(
-                codebase=self.repo_name, file=self.extract_code_units(file_path)
-            )
+            code_store.save_unit(self.extract_code_units(file_path, repo))
 
         self.logger.info(f"Extracted {len(code_store)} code units")
