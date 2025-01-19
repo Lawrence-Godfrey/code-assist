@@ -4,7 +4,7 @@ from typing import Optional
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.rag.rag_engine import RAGEngine
-from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -15,7 +15,8 @@ class RagCommands:
     def prompt(
         self,
         query: str,
-        codebase_path: str,
+        codebase_path: Optional[str] = None,
+        database_url: Optional[str] = None,
         embedding_model: str = "jinaai/jina-embeddings-v3",
         prompt_model: str = "gpt-4",
         top_k: int = 5,
@@ -28,6 +29,7 @@ class RagCommands:
         Args:
             query: The question or request about the codebase
             codebase_path: Path to the JSON file containing embedded code units
+            database_url: URL of the database containing embedded code units
             embedding_model: Name of the model to use for embeddings
             prompt_model: Name of the LLM to use for response generation
             top_k: Maximum number of similar code units to retrieve
@@ -37,15 +39,21 @@ class RagCommands:
         LoggingConfig.enabled = logging_enabled
 
         # Load codebase
-        logger.info(f"Loading codebase from {codebase_path}")
-        codebase = CodebaseSnapshot.from_json(Path(codebase_path))
+        if codebase_path:
+            logger.info(f"Loading codebase from {codebase_path}")
+            code_store = JSONCodeStore(Path(codebase_path))
+        elif database_url:
+            logger.info(f"Loading codebase from database: {database_url}")
+            code_store = MongoDBCodeStore(database_url)
+        else:
+            raise ValueError("Either codebase_path or database_url must be provided.")
 
         # Initialize embedding model
         embedding_model = EmbeddingModelFactory.create(embedding_model)
 
         # Initialize RAG engine
         engine = RAGEngine(
-            codebase=codebase,
+            code_store=code_store,
             embedding_model=embedding_model,
             prompt_model=prompt_model,
             top_k=top_k,
