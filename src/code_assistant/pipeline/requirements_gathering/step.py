@@ -2,7 +2,9 @@
 This file is used to implement the RequirementEngineering step of the agent
 pipeline. In this step we'll analyse the information given to us by the user,
 determine if enough information has been given and then create a requirement
-object that can be passed on to following steps.
+object that can be passed on to following steps. We also ensure that this step
+integrates with the feedback system, where we will correspond with the user if
+feedback is required and use an LLM to handle the validation.
 """
 
 import os
@@ -19,9 +21,6 @@ from .schema import EffortLevel, RequirementsSchema, RiskLevel, TaskType
 
 logger = get_logger(__name__)
 
-from dotenv import load_dotenv
-load_dotenv()
-
 
 class RequirementsGatherer(PipelineStep, FeedbackEnabled):
     """
@@ -35,7 +34,6 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
         prompt_model: Optional[str] = "gpt-4",
         openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
     ) -> None:
-        """Initialize the requirements gathering step with an OpenAI client."""
         PipelineStep.__init__(self)
         FeedbackEnabled.__init__(self, feedback_manager)
 
@@ -127,15 +125,12 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
                 temperature=0.1  # Low temperature for more consistent analysis
             )
 
-            # Parse the LLM's JSON response
             response_content = response.choices[0].message.content
             result = json.loads(response_content)
 
-            # Create or update schema
             schema = RequirementsSchema()
             reqs = result["requirements"]
 
-            # Update fields and track presence
             if "task_type" in reqs:
                 schema.task_type = TaskType(reqs["task_type"])
 
@@ -166,7 +161,6 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
             logger.error(f"Error during requirements analysis: {str(e)}")
             raise ValueError(f"Requirements analysis failed: {str(e)}")
 
-    # This should probably be an abstract class method on all pipeline steps
     def _request_confirmation(self, schema: RequirementsSchema) -> bool:
         """
         Request user confirmation of the final requirements.
@@ -203,7 +197,6 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
         # Initial requirements analysis
         schema, feedback_message = self._analyze_requirements(prompt)
 
-        # Display initial analysis
         from rich.console import Console
         from rich.markdown import Markdown
 
@@ -214,41 +207,34 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
 
         # Iteratively collect missing requirements through feedback
         while feedback_message:
-            # Get user feedback
             response = self.request_step_feedback(
                 context="requirements_gathering",
                 prompt=feedback_message
             )
 
-            # Update analysis with new information
             schema, feedback_message = self._analyze_requirements(
                 response, current_schema=schema
             )
 
-            # Display updated requirements
             console.print("\nUpdated Requirements Analysis:")
             console.print("=" * 50)
             console.print(Markdown(schema.to_markdown()))
 
         # Request final confirmation
         while not self._request_confirmation(schema):
-            # If user rejects, ask for what needs to change
             response = self.request_step_feedback(
                 context="requirements_update",
                 prompt="What would you like to change in these requirements?"
             )
 
-            # Update schema with changes
             schema, feedback_message = self._analyze_requirements(
                 response, current_schema=schema
             )
 
-            # Display updated requirements
             console.print("\nUpdated Requirements Analysis:")
             console.print("=" * 50)
             console.print(Markdown(schema.to_markdown()))
 
-        # Store final schema in context
         context["requirements_schema"] = schema
 
         return self.execute_next(context)

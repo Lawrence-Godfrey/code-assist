@@ -1,3 +1,29 @@
+"""
+This module defines the schema and enums for task requirements in the code
+assistant pipeline.
+
+The module provides a structured way to represent task requirements through:
+- Enumerated types for task categories, risk levels, and effort estimation
+- A RequirementsSchema class that tracks requirement completeness
+
+Classes:
+    TaskType: Enum for different types of tasks (design, investigation, implementation)
+    RiskLevel: Enum for risk assessment levels (very low to very high)
+    EffortLevel: Enum for effort estimation levels (very low to very high)
+    RequirementsSchema: Main class for storing and validating task requirements
+
+Example:
+    schema = RequirementsSchema()
+    schema.task_type = TaskType.IMPLEMENTATION
+    schema.description = "Add error handling to pipeline"
+    schema.dod = ["Add try-catch blocks", "Add tests"]
+    schema.risk = RiskLevel.MEDIUM
+    schema.effort = EffortLevel.LOW
+
+    if schema.is_valid():
+        print(schema.to_markdown())
+"""
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Set

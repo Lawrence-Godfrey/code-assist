@@ -1,3 +1,33 @@
+"""
+Core interfaces for the feedback system.
+
+This module defines the fundamental interfaces that form the backbone of the feedback
+system, implementing both the Observer pattern for feedback event handling and the
+Strategy pattern for different feedback collection methods.
+
+The module provides:
+- A Protocol for observers that want to monitor feedback events
+- An abstract base class for implementing different feedback collection interfaces
+
+The observer pattern allows components to monitor and react to feedback events without
+tight coupling to the feedback system. The strategy pattern (via FeedbackInterface)
+enables different implementations of feedback collection (CLI, web, etc.) while
+maintaining a consistent interface.
+
+Example:
+    class MyFeedbackMonitor(FeedbackObserver):
+        def on_feedback_requested(self, request):
+            print(f"Feedback requested: {request.prompt}")
+
+        def on_feedback_received(self, response):
+            print(f"Feedback received: {response.response}")
+
+    class WebFeedbackInterface(FeedbackInterface):
+        def request_feedback(self, request):
+            # Web-based implementation
+            ...
+"""
+
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Protocol
 from .models import FeedbackRequest, FeedbackResponse

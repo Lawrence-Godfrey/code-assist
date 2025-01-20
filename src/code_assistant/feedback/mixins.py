@@ -1,3 +1,35 @@
+"""
+Mixin class for enabling feedback capabilities in components.
+
+This module provides a mixin class that can be used to add feedback functionality
+to any component in the system. It simplifies the feedback request process by
+providing a clean, high-level interface that hides the complexity of feedback
+request creation and management.
+
+The mixin pattern is used here to:
+- Add feedback capabilities without inheritance conflicts
+- Provide a consistent interface across different components
+- Simplify feedback request creation and handling
+- Enable code reuse for feedback functionality
+
+Example:
+   class MyPipelineStep(PipelineStep, FeedbackEnabled):
+       def __init__(self, feedback_manager):
+           FeedbackEnabled.__init__(self, feedback_manager)
+
+       def execute(self):
+           response = self.request_step_feedback(
+               context="validation",
+               prompt="Please confirm these changes",
+               metadata={"step": "validation"}
+           )
+           # Process response...
+
+Note:
+   Components using this mixin should initialize it properly by calling
+   FeedbackEnabled.__init__() with a FeedbackManager instance.
+"""
+
 from typing import Dict, Any, List, Optional
 from .manager import FeedbackManager
 from .models import FeedbackRequest

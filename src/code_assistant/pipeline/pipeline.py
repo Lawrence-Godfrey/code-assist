@@ -39,7 +39,7 @@ class Pipeline:
 
         self._feedback_manager = FeedbackManager(interface=feedback_interface)
 
-        # Initialize pipeline steps with feedback capability
+        # Initialize pipeline steps
         self.requirements_step = RequirementsGatherer(
             feedback_manager=self._feedback_manager,
             prompt_model=prompt_model

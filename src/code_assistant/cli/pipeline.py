@@ -31,8 +31,3 @@ class PipelineCommands:
         pipeline.execute(prompt)
 
         logger.info("Pipeline execution completed successfully")
-
-if __name__ == "__main__":
-    import fire
-
-    fire.Fire(PipelineCommands)

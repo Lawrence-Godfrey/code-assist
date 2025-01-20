@@ -1,3 +1,39 @@
+"""
+Central orchestrator for the feedback system.
+
+This module implements the core feedback management system using the Observer pattern,
+coordinating feedback collection and event notifications. The FeedbackManager acts as
+both a central coordinator and an observer itself, managing the feedback lifecycle and
+notifying other system components of feedback events.
+
+The manager handles:
+- Coordinating feedback requests through configurable interfaces
+- Managing observer subscriptions for feedback events
+- Maintaining the feedback lifecycle (request -> collection -> notification)
+- Creating and distributing feedback response objects
+
+The system is designed to be extensible, allowing different feedback interfaces
+(CLI, web, etc.) to be plugged in while maintaining a consistent event notification
+system for all observers.
+
+Example:
+    # Initialize with CLI interface
+    manager = FeedbackManager(CLIFeedbackInterface())
+
+    # Add observers
+    manager.add_observer(MetricsCollector())
+    manager.add_observer(Logger())
+
+    # Request feedback
+    response = manager.request_feedback(
+        FeedbackRequest(context="user_input", prompt="Your name?")
+    )
+
+Note:
+    FeedbackManager itself implements FeedbackObserver, allowing it to be part
+    of larger feedback chains if needed.
+"""
+
 from typing import List
 from .interface import FeedbackInterface, FeedbackObserver
 from .models import FeedbackRequest, FeedbackResponse

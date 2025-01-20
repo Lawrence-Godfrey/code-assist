@@ -1,3 +1,39 @@
+"""
+Data models for the feedback system.
+
+This module defines the core data structures used throughout the feedback system
+to represent feedback requests and responses. It uses dataclasses to provide
+immutable, well-structured objects that capture all necessary information about
+feedback interactions.
+
+The module provides:
+- FeedbackRequest: Represents a request for user feedback with context
+- FeedbackResponse: Captures the user's response and links it to the original request
+
+Each model includes automatic timestamp generation and supports optional metadata
+for extensibility. The models are designed to be immutable after creation to
+ensure data integrity throughout the feedback lifecycle.
+
+Example:
+   # Create a feedback request
+   request = FeedbackRequest(
+       context="requirements_gathering",
+       prompt="What is the expected outcome?",
+       metadata={"step": "validation"}
+   )
+
+   # Create a response to the request
+   response = FeedbackResponse(
+       request=request,
+       response="The system should validate all inputs"
+   )
+
+Note:
+   Timestamps are automatically generated at instantiation time using
+   datetime.now() to provide accurate timing information for feedback
+   lifecycle tracking.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 from datetime import datetime

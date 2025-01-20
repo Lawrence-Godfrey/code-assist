@@ -1,3 +1,17 @@
+"""
+Command-line interface implementation for the feedback system.
+
+This module provides a Rich-powered CLI implementation of the feedback interface,
+offering formatted output and user input collection. It handles the presentation
+of feedback requests to users and collection of their responses through the
+command line.
+
+The interface uses Rich's Console and Markdown capabilities to provide formatted
+output, making feedback prompts more readable and visually appealing in the
+terminal. It also supports basic interaction features like cancellation through
+'q' or 'quit' commands.
+"""
+
 from rich.console import Console
 from rich.markdown import Markdown
 
