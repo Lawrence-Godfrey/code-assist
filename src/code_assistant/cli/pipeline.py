@@ -12,6 +12,7 @@ class PipelineCommands:
     def start(
         self,
         prompt: str,
+        prompt_model: str = "gpt-4",
         logging_enabled: bool = True,
     ) -> None:
         """
@@ -19,12 +20,19 @@ class PipelineCommands:
 
         Args:
             prompt: The task prompt to process
+            prompt_model: The model to use for LLM prompts
             logging_enabled: Whether to enable detailed logging
         """
         LoggingConfig.enabled = logging_enabled
 
         logger.info(f"Starting pipeline execution for prompt:\n{prompt}")
 
-        pipeline = Pipeline()
+        pipeline = Pipeline(prompt_model=prompt_model)
         pipeline.execute(prompt)
+
         logger.info("Pipeline execution completed successfully")
+
+if __name__ == "__main__":
+    import fire
+
+    fire.Fire(PipelineCommands)

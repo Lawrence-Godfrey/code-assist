@@ -7,211 +7,113 @@ object that can be passed on to following steps.
 
 import os
 import json
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional, Tuple
 
 from openai import OpenAI
 
+from code_assistant.feedback.manager import FeedbackManager
+from code_assistant.feedback.mixins import FeedbackEnabled
 from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.step import PipelineStep
+from .schema import EffortLevel, RequirementsSchema, RiskLevel, TaskType
 
 logger = get_logger(__name__)
 
+from dotenv import load_dotenv
+load_dotenv()
 
-class TaskType(Enum):
+
+class RequirementsGatherer(PipelineStep, FeedbackEnabled):
     """
-    Types of tasks that the agent can perform.
-
-    Values:
-        DESIGN_DOCUMENT: Creation of design documentation
-        INVESTIGATION: Analysis and research tasks
-        IMPLEMENTATION: Code implementation tasks
-    """
-    DESIGN_DOCUMENT = "design document"
-    INVESTIGATION = "investigation"
-    IMPLEMENTATION = "implementation"
-
-
-class RiskLevel(Enum):
-    """
-    Risk levels for task implementation.
-
-    Represents the potential impact of errors in production:
-    - VERY_LOW: Minimal to no impact on system operation
-    - LOW: Minor impact, easily fixed
-    - MEDIUM: Moderate impact, requires attention
-    - HIGH: Significant impact on system operation
-    - VERY_HIGH: Critical impact, could cause system failure
-    """
-    VERY_LOW = "very low"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    VERY_HIGH = "very high"
-
-
-class EffortLevel(Enum):
-    """
-    Effort levels for task implementation.
-
-    Similar to story points, indicates the amount of work required:
-    - VERY_LOW: Simple changes, minimal coding required
-    - LOW: Small changes, straightforward implementation
-    - MEDIUM: Moderate changes, some complexity
-    - HIGH: Significant changes, complex implementation
-    - VERY_HIGH: Major changes, highly complex implementation
-    """
-    VERY_LOW = "very low"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    VERY_HIGH = "very high"
-
-
-@dataclass
-class RequirementsSchema:
-    """
-    Schema for task requirements, defining all necessary information for task execution.
-
-    Required Fields:
-        task_type: The type of task to be performed (design, investigation, implementation)
-        description: Detailed description of what needs to be done
-        dod: Definition of Done - list of acceptance criteria
-        risk: Assessment of potential production impact
-        effort: Estimated work effort required
-
-    Optional Fields:
-        focus_region: Specific parts of the codebase to focus on
-
-    Internal Fields:
-        validation_result: Results of requirements validation checks
-
-    Examples:
-        A typical implementation task might have:
-        - task_type: TaskType.IMPLEMENTATION
-        - description: "Implement error handling in the pipeline module"
-        - dod: ["Add try-catch blocks", "Log errors appropriately", "Add tests"]
-        - risk: RiskLevel.MEDIUM
-        - effort: EffortLevel.LOW
-        - focus_region: "pipeline/error_handling.py"
-    """
-    task_type: Optional[TaskType] = None
-    description: str = ""
-    dod: List[str] = field(default_factory=list)
-    risk: Optional[RiskLevel] = None
-    effort: Optional[EffortLevel] = None
-    focus_region: Optional[str] = None
-
-    _present_fields: Set[str] = field(default_factory=set)
-    _required_fields: Set[str] = field(
-        default_factory=lambda: {'task_type', 'description', 'dod', 'risk', 'effort'}
-    )
-
-    def add_field(self, field_name: str):
-        self._present_fields.add(field_name)
-
-    def is_valid(self) -> bool:
-        """Check if all required fields are present."""
-        return all(field in self._present_fields for field in self._required_fields)
-
-    def to_markdown(self, include_missing: bool = True) -> str:
-        """
-        Convert the requirements schema to a markdown formatted string.
-
-        Args:
-            include_missing: Whether to include requirements that are missing or invalid
-
-        Returns:
-            Markdown formatted string representing the requirements
-        """
-        lines = ["# Task Requirements\n"]
-
-        if 'task_type' in self._present_fields:
-            lines.extend(["### Task Type", f"{self.task_type.value}\n"])
-
-        if 'description' in self._present_fields:
-            lines.extend(["### Description", f"{self.description}\n"])
-
-        if 'dod' in self._present_fields:
-            lines.extend(["### Definition of Done"])
-            lines.extend(f"- {item}" for item in self.dod)
-            lines.append("")
-
-        if 'risk' in self._present_fields:
-            lines.extend(["### Risk Level", f"{self.risk.value}\n"])
-
-        if 'effort' in self._present_fields:
-            lines.extend(["### Effort Level", f"{self.effort.value}\n"])
-
-        if 'focus_region' in self._present_fields:
-            lines.extend(["### Focus Region", f"{self.focus_region}\n"])
-
-        return "\n".join(lines)
-
-class RequirementsGatherer(PipelineStep):
-    """
-    This step in the pipeline handles requirements gathering. It validates and
-    processes the initial task prompt against the requirement schema.
+    Pipeline step for gathering and validating requirements.
+    Uses LLM for analysis, validation, and feedback generation.
     """
 
     def __init__(
         self,
+        feedback_manager: FeedbackManager,
         prompt_model: Optional[str] = "gpt-4",
         openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
     ) -> None:
         """Initialize the requirements gathering step with an OpenAI client."""
-        super().__init__()
+        PipelineStep.__init__(self)
+        FeedbackEnabled.__init__(self, feedback_manager)
 
         # Initialise large LLM client. At this point, only OpenAI is available.
-        self._prompt_model = prompt_model
-        if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
+        if prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
             self._client = OpenAI(api_key=openai_api_key)
         else:
-            raise ValueError(f"The model {self._prompt_model} is not supported.")
+            raise ValueError(f"The model {prompt_model} is not supported.")
 
-    def _validate_requirements(self, prompt: str) -> RequirementsSchema:
+        self._prompt_model = prompt_model
+
+    def _analyze_requirements(
+            self, prompt: str, current_schema: Optional[RequirementsSchema] = None
+    ) -> Tuple[RequirementsSchema, Optional[str]]:
         """
-        Validate the prompt against requirements schema using LLM analysis.
-
-        This method sends the user's prompt to an LLM to analyze and extract
-        requirements. The LLM determines which requirements are present,
-        missing, or invalid based on the information provided.
+        Use LLM to analyze requirements and generate feedback if needed.
 
         Args:
             prompt: The user's task prompt
+            current_schema: Optional, existing requirements schema
 
         Returns:
-            RequirementsSchema with validation results
-
-        Raises:
-            ValueError: If LLM response is invalid or requirements validation fails
+            Tuple of (updated schema, feedback message if requirements are missing)
         """
-        analysis_prompt = f"""
-        Analyze the following task prompt and extract the requirements into JSON format.
-        Only include fields where information is clearly provided in the prompt or can be easily inferred.
 
-        Task Prompt: {prompt}
+        # Construct the analysis prompt
+        if current_schema:
+            analysis_prompt = f"""
+            Analyze the following new information in the context of the current requirements:
 
+            Current Requirements:
+            {current_schema.to_markdown()}
+
+            New Information:
+            {prompt}
+            """
+        else:
+            analysis_prompt = f"""
+            Analyze the following task prompt and extract all requirements into JSON format.
+            If any information is missing, provide a clear and specific message asking for it.
+            Only include fields where information is clearly provided in the prompt or can be easily inferred.
+            If you can reasonably infer any requirements, do so and note your assumptions.
+
+            Task Prompt: {prompt}
+            """
+
+        analysis_prompt += """
         Requirements to identify:
         1. Task Type (Required) - Must be one of: "design document", "investigation", "implementation"
         2. Description (Required) - Clear description of the task
         3. Definition of Done (Required) - List of acceptance criteria
         4. Risk Level (Required) - Must be one of: "very low", "low", "medium", "high", "very high"
         5. Effort Level (Required) - Must be one of: "very low", "low", "medium", "high", "very high"
-        6. Focus Region (Optional) - Specific parts of the codebase to focus on
-
-        Respond in the following JSON format, only including fields that are clearly specified:
-        {{
-            "task_type": "type_value",
-            "description": "description_text",
-            "dod": ["criterion1", "criterion2"],
-            "risk": "risk_level",
-            "effort": "effort_level",
-            "focus_region": "region_path"
-        }}
+        6. Focus Region (Optional) - Specific parts of the codebase to focus on, this is optional. if not provided, do not ask for it.
         
-        Please ONLY respond with the JSON format above and nothing else.
+        Respond with a JSON object only, containing:
+        1. requirements: The extracted/updated requirements
+        2. feedback_message: A message asking for specific missing information, or null if complete
+        3. complete: Boolean indicating if all required information is present
+        4. assumptions: List of any assumptions made when inferring requirements
+
+        Example Response:
+        {
+            "requirements": {
+                "task_type": "implementation",
+                "description": "...",
+                "dod": ["..."],
+                "risk": "medium",
+                "effort": "low",
+                "focus_region": "..."
+            },
+            "feedback_message": "Could you please specify...",
+            "complete": false,
+            "assumptions": ["Assumed medium risk due to..."]
+        }
+        
+        Please ONLY respond with the JSON format above and nothing else. If fields are empty,
+        they should not be included in the response.
         """
 
         try:
@@ -226,57 +128,71 @@ class RequirementsGatherer(PipelineStep):
             )
 
             # Parse the LLM's JSON response
-            requirements_data = json.loads(response.choices[0].message.content)
+            response_content = response.choices[0].message.content
+            result = json.loads(response_content)
 
-            # Create schema with default values
+            # Create or update schema
             schema = RequirementsSchema()
+            reqs = result["requirements"]
 
             # Update fields and track presence
-            if "task_type" in requirements_data:
-                schema.task_type = TaskType(requirements_data["task_type"])
-                schema.add_field("task_type")
+            if "task_type" in reqs:
+                schema.task_type = TaskType(reqs["task_type"])
 
-            if "description" in requirements_data:
-                schema.description = requirements_data["description"]
-                schema.add_field("description")
+            if "description" in reqs:
+                schema.description = reqs["description"]
 
-            if "dod" in requirements_data:
-                schema.dod = requirements_data["dod"]
-                schema.add_field("dod")
+            if "dod" in reqs:
+                schema.dod = reqs["dod"]
 
-            if "risk" in requirements_data:
-                schema.risk = RiskLevel(requirements_data["risk"])
-                schema.add_field("risk")
+            if "risk" in reqs:
+                schema.risk = RiskLevel(reqs["risk"])
 
-            if "effort" in requirements_data:
-                schema.effort = EffortLevel(requirements_data["effort"])
-                schema.add_field("effort")
+            if "effort" in reqs:
+                schema.effort = EffortLevel(reqs["effort"])
 
-            if "focus_region" in requirements_data:
-                schema.focus_region = requirements_data["focus_region"]
-                schema.add_field("focus_region")
+            if "focus_region" in reqs:
+                schema.focus_region = reqs["focus_region"]
 
-            return schema
+            # Log any assumptions made
+            if result.get("assumptions"):
+                logger.info("Assumptions made during analysis:")
+                for assumption in result["assumptions"]:
+                    logger.info(f"- {assumption}")
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON response from LLM: {str(e)}")
-            raise ValueError("Failed to parse LLM response")
-        except ValueError as e:
-            logger.error(f"Invalid enum value in LLM response: {str(e)}")
-            raise ValueError("Invalid requirement value in LLM response")
+            return schema, result.get("feedback_message")
+
         except Exception as e:
-            logger.error(f"Error during requirements validation: {str(e)}")
-            raise ValueError(f"Requirements validation failed: {str(e)}")
+            logger.error(f"Error during requirements analysis: {str(e)}")
+            raise ValueError(f"Requirements analysis failed: {str(e)}")
+
+    # This should probably be an abstract class method on all pipeline steps
+    def _request_confirmation(self, schema: RequirementsSchema) -> bool:
+        """
+        Request user confirmation of the final requirements.
+
+        Args:
+            schema: The complete requirements schema
+
+        Returns:
+            True if user confirms, False if rejected
+        """
+        response = self.request_step_feedback(
+            context="requirements_confirmation",
+            prompt=(
+                "Please review the final requirements below and confirm if they are correct:\n\n"
+                f"{schema.to_markdown()}\n\n"
+                "Are these requirements correct? (yes/no)"
+            )
+        )
+        return response.lower().strip() in ('y', 'yes')
 
     def execute(self, context: Dict) -> None:
         """
-        Execute the requirements engineering step.
+        Execute the requirements gathering step with LLM-driven feedback.
 
         Args:
             context: Pipeline context containing the prompt and other data
-
-        Raises:
-            ValueError: If the prompt is missing from context
         """
         if "prompt" not in context:
             raise ValueError("Prompt not found in pipeline context")
@@ -284,18 +200,55 @@ class RequirementsGatherer(PipelineStep):
         prompt = context["prompt"]
         logger.info("Starting requirements engineering step")
 
-        # Validate requirements
-        schema = self._validate_requirements(prompt)
-        context["requirements_schema"] = schema
+        # Initial requirements analysis
+        schema, feedback_message = self._analyze_requirements(prompt)
 
-        # Display the markdown
+        # Display initial analysis
         from rich.console import Console
         from rich.markdown import Markdown
 
         console = Console()
-        markdown_str = schema.to_markdown()
-        console.print("\nTask Requirements Analysis:")
+        console.print("\nInitial Requirements Analysis:")
         console.print("=" * 50)
-        console.print(Markdown(markdown_str))
+        console.print(Markdown(schema.to_markdown()))
+
+        # Iteratively collect missing requirements through feedback
+        while feedback_message:
+            # Get user feedback
+            response = self.request_step_feedback(
+                context="requirements_gathering",
+                prompt=feedback_message
+            )
+
+            # Update analysis with new information
+            schema, feedback_message = self._analyze_requirements(
+                response, current_schema=schema
+            )
+
+            # Display updated requirements
+            console.print("\nUpdated Requirements Analysis:")
+            console.print("=" * 50)
+            console.print(Markdown(schema.to_markdown()))
+
+        # Request final confirmation
+        while not self._request_confirmation(schema):
+            # If user rejects, ask for what needs to change
+            response = self.request_step_feedback(
+                context="requirements_update",
+                prompt="What would you like to change in these requirements?"
+            )
+
+            # Update schema with changes
+            schema, feedback_message = self._analyze_requirements(
+                response, current_schema=schema
+            )
+
+            # Display updated requirements
+            console.print("\nUpdated Requirements Analysis:")
+            console.print("=" * 50)
+            console.print(Markdown(schema.to_markdown()))
+
+        # Store final schema in context
+        context["requirements_schema"] = schema
 
         return self.execute_next(context)
