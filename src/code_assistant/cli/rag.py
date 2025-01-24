@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -15,9 +16,11 @@ class RagCommands:
     def prompt(
         self,
         query: str,
-        codebase_path: Optional[str] = None,
-        database_url: Optional[str] = None,
-        embedding_model: str = "jinaai/jina-embeddings-v3",
+        codebase: str,
+        codebase_path: str = os.getenv("CODE_UNITS_PATH", "code_units.json"),
+        database_url: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/"),
+        embedding_model: str = EmbeddingModelFactory.get_default_model(),
+        openai_api_key: str = os.getenv("OPENAI_API_KEY"),
         prompt_model: str = "gpt-4",
         top_k: int = 5,
         threshold: Optional[float] = None,
@@ -28,9 +31,11 @@ class RagCommands:
 
         Args:
             query: The question or request about the codebase
+            codebase: Name of the codebase containing embedded code units
             codebase_path: Path to the JSON file containing embedded code units
             database_url: URL of the database containing embedded code units
             embedding_model: Name of the model to use for embeddings
+            openai_api_key: API key for OpenAI models
             prompt_model: Name of the LLM to use for response generation
             top_k: Maximum number of similar code units to retrieve
             threshold: Minimum similarity score (0-1) for retrieved code
@@ -39,12 +44,12 @@ class RagCommands:
         LoggingConfig.enabled = logging_enabled
 
         # Load codebase
-        if codebase_path:
-            logger.info(f"Loading codebase from {codebase_path}")
-            code_store = JSONCodeStore(Path(codebase_path))
-        elif database_url:
+        if database_url:
             logger.info(f"Loading codebase from database: {database_url}")
-            code_store = MongoDBCodeStore(database_url)
+            code_store = MongoDBCodeStore(codebase, database_url)
+        elif codebase_path:
+            logger.info(f"Loading codebase from {codebase_path}")
+            code_store = JSONCodeStore(codebase, Path(codebase_path))
         else:
             raise ValueError("Either codebase_path or database_url must be provided.")
 
@@ -58,6 +63,7 @@ class RagCommands:
             prompt_model=prompt_model,
             top_k=top_k,
             threshold=threshold,
+            openai_api_key=openai_api_key,
         )
 
         # Process query

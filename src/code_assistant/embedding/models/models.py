@@ -88,6 +88,11 @@ class EmbeddingModelFactory:
         """Get a list of all registered model classes."""
         return cls._models
 
+    @classmethod
+    def get_default_model(cls):
+        """Get the default model name."""
+        return "jinaai/jina-embeddings-v3"
+
 
 class EmbeddingModel(ABC):
     """Abstract base class for embedding models."""

@@ -1,6 +1,9 @@
+import dotenv
 import fire
 
 from code_assistant.cli import embed, evaluate, extract, generate, rag
+
+dotenv.load_dotenv()
 
 
 class CLI:

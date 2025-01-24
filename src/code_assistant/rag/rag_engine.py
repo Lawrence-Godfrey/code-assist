@@ -28,13 +28,9 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-from code_assistant.embedding.compare_embeddings import (
-    EmbeddingSimilaritySearch,
-    SearchResult,
-)
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores import CodeStore
+from code_assistant.storage.stores import CodeStore, SearchResult
 
 logger = get_logger(__name__)
 
@@ -65,16 +61,12 @@ class RAGEngine:
            FileNotFoundError: If the code_units_path file cannot be found.
            ValueError: If an unsupported prompt_model is specified.
         """
+        self.code_store = code_store
         self._prompt_model = prompt_model
         self._top_k = top_k
         self._threshold = threshold
 
         self._embedding_model = embedding_model
-
-        # Initialize similarity searcher
-        self._searcher = EmbeddingSimilaritySearch(
-            code_store=code_store, embedding_model=embedding_model
-        )
 
         # Initialise large LLM client. At this point, only OpenAI is available.
         if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
@@ -119,8 +111,9 @@ class RAGEngine:
         query_embedding = self._embedding_model.generate_embedding(query)
 
         # Find code units similar to the query
-        similar_code_units = self._searcher.find_similar(
-            query_embedding=query_embedding,
+        similar_code_units = self.code_store.vector_search(
+            query_embedding,
+            self._embedding_model,
             top_k=self._top_k,
             threshold=self._threshold,
         )

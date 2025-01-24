@@ -1,23 +1,10 @@
-from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
 
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.storage.codebase import CodeEmbedding, CodeUnit
-from code_assistant.storage.stores import CodeStore
-
-
-@dataclass
-class SearchResult:
-    """
-    A container for search results that includes both the code unit metadata
-    and its similarity score. This provides a clean, type-safe way to return
-    search results with their relevance scores.
-    """
-
-    code_unit: CodeUnit
-    similarity_score: float
+from code_assistant.storage.stores import CodeStore, SearchResult
 
 
 class EmbeddingSimilaritySearch:

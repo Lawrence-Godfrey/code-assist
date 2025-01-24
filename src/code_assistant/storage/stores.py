@@ -1,6 +1,7 @@
 import json
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Union
 
@@ -23,6 +24,18 @@ from code_assistant.storage.codebase import (
 )
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class SearchResult:
+    """
+    A container for search results that includes both the code unit metadata
+    and its similarity score. This provides a clean, type-safe way to return
+    search results with their relevance scores.
+    """
+
+    code_unit: CodeUnit
+    similarity_score: float
 
 
 class CodeStore(ABC):
@@ -54,6 +67,11 @@ class CodeStore(ABC):
     @abstractmethod
     def get_units_by_type(self, unit_type: Union[str, List[str]]) -> List[CodeUnit]:
         """Get all code units of specified type(s)."""
+        pass
+
+    @abstractmethod
+    def refresh_vector_indexes(self) -> None:
+        """Recreate vector search indexes for all embedding models."""
         pass
 
     @abstractmethod
@@ -98,11 +116,11 @@ class CodeStore(ABC):
     @abstractmethod
     def vector_search(
         self,
-        embedding_model: EmbeddingModel,
         embedding: CodeEmbedding,
+        embedding_model: EmbeddingModel,
         top_k: int = 5,
         threshold: Optional[float] = None,
-    ) -> List[CodeUnit]:
+    ) -> List[SearchResult]:
         """
         Find similar code units using vector similarity search.
         Not all storage backends will support this natively.
@@ -351,7 +369,7 @@ class CodebaseFilteredCollection:
         )
 
     def aggregate(
-        self, pipeline: List[Dict], *args, **kwargs
+        self, pipeline: List[Dict], include_db_id=False, *args, **kwargs
     ) -> CommandCursor[Mapping[str, Any] | Any]:
         """Override aggregate to include codebase filter in $match stage."""
         if self._codebase is not None:
@@ -361,6 +379,26 @@ class CodebaseFilteredCollection:
             # Add to existing $match stage if it exists
             elif "$match" in pipeline[0]:
                 pipeline[0]["$match"]["codebase"] = self._codebase
+
+        # Handle projection
+        projection = kwargs.pop("projection", {})
+        projection.update(
+            {
+                "id": 1,
+                "codebase": 1,
+                "unit_type": 1,
+                "docstring": 1,
+                "name": 1,
+                "filepath": 1,
+                "classname": 1,
+                "source_code": 1,
+                "embeddings": 1,
+            }
+        )
+        proj_dict = self._get_projection(projection, include_db_id)
+        proj_dict["score"] = {"$meta": "vectorSearchScore"}
+        # Add projection as final stage of pipeline
+        pipeline.append({"$project": proj_dict})
 
         return self._collection.aggregate(pipeline, *args, **kwargs)
 
@@ -423,6 +461,17 @@ class MongoDBCodeStore(DatabaseCodeStore):
         self.code_units.create_index("unit_type")
         self.code_units.create_index("codebase")
         self.code_units.create_index([("unit_type", 1), ("codebase", 1)])
+
+    def refresh_vector_indexes(self) -> None:
+        """Recreate vector search indexes for all embedding models."""
+        # find unique model names
+        model_names = dict()
+        for doc in self.code_units.find({"embeddings": {"$exists": True}}):
+            for model_name in doc.get("embeddings", {}):
+                model_names[model_name] = len(doc["embeddings"][model_name]["vector"])
+
+        for model_name, dimensions in model_names.items():
+            self._ensure_vector_index(model_name, dimensions)
 
     def _ensure_vector_index(self, model_name: str, dimensions: int) -> None:
         """
@@ -582,23 +631,24 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
     def vector_search(
         self,
-        embedding_model: EmbeddingModel,
         embedding: CodeEmbedding,
+        embedding_model: EmbeddingModel,
         top_k: int = 5,
         threshold: Optional[float] = None,
-    ) -> List[CodeUnit]:
+    ) -> List[SearchResult]:
         """Perform vector similarity search across all code units."""
 
         # Use model-specific index
         index_name = f"vector_index_{embedding.model_name.replace('/', '_')}"
         vector_path = f"embeddings.{embedding.model_name}.vector"
+        query_vector = embedding.vector.astype(float).tolist()
 
         pipeline = [
             {
                 "$vectorSearch": {
                     "index": index_name,
                     "path": vector_path,
-                    "queryVector": list(embedding.vector),
+                    "queryVector": query_vector,
                     "numCandidates": top_k * 10,
                     "limit": top_k,
                 }
@@ -607,10 +657,10 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
         if threshold:
             pipeline.append({"$match": {"score": {"$gte": threshold}}})
-
         results = []
         for doc in self.code_units.aggregate(pipeline):
+            score = doc.pop("score")
             if unit := CodeUnit.from_dict(doc):
-                results.append(unit)
+                results.append(SearchResult(unit, similarity_score=score))
 
         return results

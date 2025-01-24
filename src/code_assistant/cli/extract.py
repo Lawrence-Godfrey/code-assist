@@ -18,8 +18,8 @@ class ExtractCommands:
     def github(
         self,
         repo_url: str,
-        output_path: Optional[str] = None,
-        database_url: str = "mongodb://localhost:27017/",
+        output_path: str = os.getenv("CODE_UNITS_PATH", "code_units.json"),
+        database_url: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/"),
         max_files: Optional[int] = None,
         github_token: Optional[str] = None,
         repo_download_dir: Optional[str] = os.path.expanduser(
@@ -34,12 +34,12 @@ class ExtractCommands:
 
         repo = extractor.clone_repository(repo_url=repo_url)
 
-        if output_path:
-            code_store = JSONCodeStore(codebase=repo.name, filepath=Path(output_path))
-        elif database_url:
+        if database_url:
             code_store = MongoDBCodeStore(
                 codebase=repo.name, connection_string=database_url
             )
+        elif output_path:
+            code_store = JSONCodeStore(codebase=repo.name, filepath=Path(output_path))
         else:
             raise ValueError("Either output_path or database_url must be provided.")
 
