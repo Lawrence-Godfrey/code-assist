@@ -13,12 +13,11 @@ pip install code-assistant
 The package provides a command-line interface with several subcommands.
 It's generally easier to add secrets to a `.env` file in the project root directory than to pass them as arguments.
 
-Codebases can be stored in a JSON file or a MongoDB database. We recommend using the MongoDB option.
+Codebases are stored in a MongoDB database, although in future more storage options will be provided.
 
 The following environment variables can be set:
 - `MONGODB_URL`
 - `OPENAI_API_KEY`
-- `CODE_UNITS_PATH`
 
 ### Extract Code from GitHub
 

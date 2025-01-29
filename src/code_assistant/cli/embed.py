@@ -1,11 +1,10 @@
 import os
-from pathlib import Path
 from typing import Optional
 
 from code_assistant.embedding.code_embedder import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores import CodeStore, JSONCodeStore, MongoDBCodeStore
+from code_assistant.storage.stores import CodeStore, MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -16,24 +15,21 @@ class EmbedCommands:
     def _process_embeddings(
         self,
         codebase: str,
-        input_path: str,
         database_url: str,
         model_name: str,
         openai_api_key: Optional[str] = None,
     ) -> None:
         """
-        Generate embeddings for code units from a JSON file.
+        Generate embeddings for code units from a codebase.
 
         Args:
             codebase: Name of the codebase to embed.
-            input_path: Path to the JSON file containing code units
-                             (defaults to 'code_units.json' in current directory)
             database_url: URL for MongoDB database to store code units
             model_name: Name of the Hugging Face model to use for embeddings
             openai_api_key: OpenAI API key for OpenAI models
         """
 
-        code_store = self._setup_code_store(codebase, input_path, database_url)
+        code_store = self._setup_code_store(codebase, database_url)
 
         model = EmbeddingModelFactory.create(model_name, openai_api_key=openai_api_key)
 
@@ -51,19 +47,16 @@ class EmbedCommands:
     def generate(
         self,
         codebase: str,
-        input_path: str = "code_units.json",
         database_url: str = "mongodb://localhost:27017/",
         model_name: str = EmbeddingModelFactory.get_default_model(),
         openai_api_key: str = os.getenv("OPENAI_API_KEY"),
     ) -> None:
         """Generate embeddings for code units."""
 
-        input_path = os.getenv("CODE_UNITS_PATH") or input_path
         database_url = os.getenv("MONGODB_URL") or database_url
 
         self._process_embeddings(
             codebase=codebase,
-            input_path=input_path,
             database_url=database_url,
             model_name=model_name,
             openai_api_key=openai_api_key,
@@ -73,7 +66,6 @@ class EmbedCommands:
         self,
         codebase: str,
         query: str,
-        input_path: str = "code_units.json",
         database_url: str = "mongodb://localhost:27017/",
         model_name: str = EmbeddingModelFactory.get_default_model(),
         top_k: int = 5,
@@ -81,10 +73,9 @@ class EmbedCommands:
     ) -> None:
         """Compare a query against embedded code units."""
 
-        input_path = os.getenv("CODE_UNITS_PATH") or input_path
         database_url = os.getenv("MONGODB_URL") or database_url
 
-        code_store = self._setup_code_store(codebase, input_path, database_url)
+        code_store = self._setup_code_store(codebase, database_url)
 
         embedding_model = EmbeddingModelFactory.create(model_name)
 
@@ -106,24 +97,10 @@ class EmbedCommands:
     def _setup_code_store(
         self,
         codebase: str,
-        input_path: str,
         database_url: str,
     ) -> CodeStore:
-        if database_url:
-            logger.info("Loading code units from MongoDB database")
-            code_store = MongoDBCodeStore(
-                codebase=codebase, connection_string=database_url
-            )
-        else:
-            input_path = os.path.abspath(input_path)
-            if not os.path.exists(input_path):
-                raise FileNotFoundError(
-                    f"Input file not found: {input_path}\n"
-                    "Please provide the correct path to your code units JSON file."
-                )
-
-            logger.info(f"Loading code units from {input_path}")
-            code_store = JSONCodeStore(codebase=codebase, filepath=Path(input_path))
+        logger.info(f"Loading code units from {database_url}...")
+        code_store = MongoDBCodeStore(codebase=codebase, connection_string=database_url)
 
         if not code_store.codebase_exists():
             raise ValueError(f"Codebase {codebase} does not exist.")

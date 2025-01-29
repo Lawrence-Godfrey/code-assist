@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -12,7 +13,7 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
 from code_assistant.evaluation.evaluate_retrieval import (
     MultiModelCodeRetrievalEvaluator,
 )
-from code_assistant.storage.stores import JSONCodeStore
+from code_assistant.storage.stores import MongoDBCodeStore
 
 
 class EvaluateCommands:
@@ -21,13 +22,16 @@ class EvaluateCommands:
     def retrieval(
         self,
         test_data_path: str,
-        codebase_path: str,
+        codebase: str,
+        database_url: str = "mongodb://localhost:27017/",
         output_path: Optional[str] = None,
         openai_api_key: Optional[str] = None,
     ) -> None:
         """Evaluate retrieval performance across models."""
 
-        code_store = JSONCodeStore(Path(codebase_path))
+        database_url = os.getenv("MONGODB_URL") or database_url
+
+        code_store = MongoDBCodeStore(codebase=codebase, connection_string=database_url)
 
         test_dataset = PromptCodePairDataset.from_json(Path(test_data_path), code_store)
 
@@ -36,7 +40,7 @@ class EvaluateCommands:
         for model_name, cls in model_classes.items():
             if issubclass(cls, OpenAIEmbeddingModel):
                 if openai_api_key:
-                    model = cls(model_name=model_name, api_key=openai_api_key)
+                    model = cls(model_name=model_name, openai_api_key=openai_api_key)
                     models.append(model)
             else:
                 model = cls(model_name=model_name)

@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Optional
 
 from code_assistant.data_extraction.extractors.github_code_extractor import (
@@ -7,7 +6,7 @@ from code_assistant.data_extraction.extractors.github_code_extractor import (
     GitHubCodeExtractor,
 )
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
+from code_assistant.storage.stores import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -18,7 +17,6 @@ class ExtractCommands:
     def github(
         self,
         repo_url: str,
-        output_path: str = "code_units.json",
         database_url: str = "mongodb://localhost:27017/",
         max_files: Optional[int] = None,
         github_token: Optional[str] = None,
@@ -35,16 +33,10 @@ class ExtractCommands:
         repo = extractor.clone_repository(repo_url=repo_url)
 
         database_url = os.getenv("MONGODB_URL") or database_url
-        output_path = os.getenv("CODE_UNITS_PATH") or output_path
 
-        if database_url:
-            code_store = MongoDBCodeStore(
-                codebase=repo.name, connection_string=database_url
-            )
-        elif output_path:
-            code_store = JSONCodeStore(codebase=repo.name, filepath=Path(output_path))
-        else:
-            raise ValueError("Either output_path or database_url must be provided.")
+        code_store = MongoDBCodeStore(
+            codebase=repo.name, connection_string=database_url
+        )
 
         try:
             extractor.process_repository(

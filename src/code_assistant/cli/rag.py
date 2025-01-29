@@ -1,11 +1,10 @@
 import os
-from pathlib import Path
 from typing import Optional
 
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.rag.rag_engine import RAGEngine
-from code_assistant.storage.stores import JSONCodeStore, MongoDBCodeStore
+from code_assistant.storage.stores import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -17,7 +16,6 @@ class RagCommands:
         self,
         query: str,
         codebase: str,
-        codebase_path: str = "code_units.json",
         database_url: str = "mongodb://localhost:27017/",
         embedding_model: str = EmbeddingModelFactory.get_default_model(),
         openai_api_key: str = os.getenv("OPENAI_API_KEY"),
@@ -32,7 +30,6 @@ class RagCommands:
         Args:
             query: The question or request about the codebase
             codebase: Name of the codebase containing embedded code units
-            codebase_path: Path to the JSON file containing embedded code units
             database_url: URL of the database containing embedded code units
             embedding_model: Name of the model to use for embeddings
             openai_api_key: API key for OpenAI models
@@ -43,18 +40,11 @@ class RagCommands:
         """
         LoggingConfig.enabled = logging_enabled
 
-        codebase_path = os.getenv("CODE_UNITS_PATH") or codebase_path
         database_url = os.getenv("MONGODB_URL") or database_url
 
         # Load codebase
-        if database_url:
-            logger.info(f"Loading codebase from database: {database_url}")
-            code_store = MongoDBCodeStore(codebase, database_url)
-        elif codebase_path:
-            logger.info(f"Loading codebase from {codebase_path}")
-            code_store = JSONCodeStore(codebase, Path(codebase_path))
-        else:
-            raise ValueError("Either codebase_path or database_url must be provided.")
+        logger.info(f"Loading codebase from database: {database_url}")
+        code_store = MongoDBCodeStore(codebase, database_url)
 
         # Initialize embedding model
         embedding_model = EmbeddingModelFactory.create(embedding_model)
