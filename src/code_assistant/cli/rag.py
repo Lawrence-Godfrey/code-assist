@@ -17,8 +17,8 @@ class RagCommands:
         self,
         query: str,
         codebase: str,
-        codebase_path: str = os.getenv("CODE_UNITS_PATH", "code_units.json"),
-        database_url: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/"),
+        codebase_path: str = "code_units.json",
+        database_url: str = "mongodb://localhost:27017/",
         embedding_model: str = EmbeddingModelFactory.get_default_model(),
         openai_api_key: str = os.getenv("OPENAI_API_KEY"),
         prompt_model: str = "gpt-4",
@@ -42,6 +42,9 @@ class RagCommands:
             logging_enabled: Whether to log detailed pipeline execution info
         """
         LoggingConfig.enabled = logging_enabled
+
+        codebase_path = os.getenv("CODE_UNITS_PATH") or codebase_path
+        database_url = os.getenv("MONGODB_URL") or database_url
 
         # Load codebase
         if database_url:

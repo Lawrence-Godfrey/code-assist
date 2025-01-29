@@ -51,12 +51,15 @@ class EmbedCommands:
     def generate(
         self,
         codebase: str,
-        input_path: str = os.getenv("CODE_UNITS_PATH", "code_units.json"),
-        database_url: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/"),
+        input_path: str = "code_units.json",
+        database_url: str = "mongodb://localhost:27017/",
         model_name: str = EmbeddingModelFactory.get_default_model(),
         openai_api_key: str = os.getenv("OPENAI_API_KEY"),
     ) -> None:
         """Generate embeddings for code units."""
+
+        input_path = os.getenv("CODE_UNITS_PATH") or input_path
+        database_url = os.getenv("MONGODB_URL") or database_url
 
         self._process_embeddings(
             codebase=codebase,
@@ -70,13 +73,16 @@ class EmbedCommands:
         self,
         codebase: str,
         query: str,
-        input_path: str = os.getenv("CODE_UNITS_PATH", "code_units.json"),
-        database_url: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/"),
+        input_path: str = "code_units.json",
+        database_url: str = "mongodb://localhost:27017/",
         model_name: str = EmbeddingModelFactory.get_default_model(),
         top_k: int = 5,
         threshold: Optional[float] = None,
     ) -> None:
         """Compare a query against embedded code units."""
+
+        input_path = os.getenv("CODE_UNITS_PATH") or input_path
+        database_url = os.getenv("MONGODB_URL") or database_url
 
         code_store = self._setup_code_store(codebase, input_path, database_url)
 
