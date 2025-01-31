@@ -29,7 +29,7 @@ Example:
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Protocol
+from typing import Protocol
 from .models import FeedbackRequest, FeedbackResponse
 
 
