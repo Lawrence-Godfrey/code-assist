@@ -30,6 +30,7 @@ from openai import OpenAI
 
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
+from code_assistant.prompt.models import PromptModel
 from code_assistant.storage.stores import CodeStore, SearchResult
 
 logger = get_logger(__name__)
@@ -40,19 +41,17 @@ class RAGEngine:
         self,
         code_store: CodeStore,
         embedding_model: EmbeddingModel,
-        prompt_model: Optional[str] = "gpt-4",
+        prompt_model: PromptModel,
         top_k: Optional[int] = 5,
         threshold: Optional[float] = None,
-        openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
     ):
         """
         Initialises the RAG engine.
 
         Args:
             code_store: CodeStore object for accessing code units.
-            prompt_model: Name of the large LLM model to use for response
-                generation. Defaults to "gpt-4".
             embedding_model: EmbeddingModel object used to generate the embeddings.
+             prompt_model: PromptModel object used for generating prompts.
             top_k: Maximum number of similar code units to retrieve. Defaults to 5.
             threshold: Minimum similarity score (0-1) required for retrieved code
                 units. Defaults to None.
@@ -62,17 +61,11 @@ class RAGEngine:
            ValueError: If an unsupported prompt_model is specified.
         """
         self.code_store = code_store
-        self._prompt_model = prompt_model
         self._top_k = top_k
         self._threshold = threshold
 
         self._embedding_model = embedding_model
-
-        # Initialise large LLM client. At this point, only OpenAI is available.
-        if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
-            self._client = OpenAI(api_key=openai_api_key)
-        else:
-            raise ValueError(f"The model {self._prompt_model} is not supported.")
+        self._prompt_model = prompt_model
 
     def process(self, query: str) -> str:
         """
@@ -181,7 +174,8 @@ class RAGEngine:
 
     def _generate(self, prompt) -> str:
         """
-        Generates a response using the augmented prompt via the OpenAI API.
+        Generates a response using the augmented prompt via the specified prompt
+        model.
 
         Args:
             prompt (str): The augmented prompt.
@@ -189,19 +183,15 @@ class RAGEngine:
         Returns:
             response_message (str): The generated response from the large LLM.
         """
-        response = self._client.chat.completions.create(
-            model=self._prompt_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant with expertise in Python programming.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+        system_prompt = (
+            "You are a helpful assistant with expertise in Python programming."
         )
-        response_message = response.choices[0].message.content
+        response = self._prompt_model.generate_response(
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+        )
 
         logger.info("\nGenerated Response:\n")
-        logger.info(response_message)
+        logger.info(response)
 
-        return response_message
+        return response
