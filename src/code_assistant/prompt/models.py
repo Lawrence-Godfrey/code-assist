@@ -256,7 +256,7 @@ class AnthropicPromptModel(PromptModel):
             system_prompt: str,
             user_prompt: str,
             temperature: float = 0.7,
-            max_tokens: Optional[int] = None
+            max_tokens: int = 1024  # Max tokens must be set for Anthropic
     ) -> str:
         """
         Generate a response using the Anthropic API.
@@ -265,7 +265,7 @@ class AnthropicPromptModel(PromptModel):
             system_prompt: System context/instruction for the model
             user_prompt: User query or instruction
             temperature: Controls response randomness (0.0 to 1.0)
-            max_tokens: Optional maximum response length
+            max_tokens: Maximum response length
 
         Returns:
             Generated response as a string
@@ -277,6 +277,9 @@ class AnthropicPromptModel(PromptModel):
         if not 0.0 <= temperature <= 1.0:
             raise ValueError("Temperature must be between 0.0 and 1.0")
 
+        if max_tokens <= 0:
+            raise ValueError("max_tokens must be greater than 0")
+
         try:
             # Combine system and user prompts as per Anthropic's format
             combined_prompt = f"{system_prompt}\n\nHuman: {user_prompt}\n\nAssistant:"
@@ -285,14 +288,9 @@ class AnthropicPromptModel(PromptModel):
             params = {
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": combined_prompt}],
+                "max_tokens": max_tokens,
                 "temperature": temperature
             }
-
-            # Add max_tokens if specified
-            if max_tokens is not None:
-                if max_tokens <= 0:
-                    raise ValueError("max_tokens must be greater than 0")
-                params["max_tokens"] = max_tokens
 
             # Make the API call
             response = self._client.messages.create(**params)
