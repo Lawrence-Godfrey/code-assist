@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 import numpy as np
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.code_store import CodeEmbedding
+from code_assistant.storage.codebase import CodeEmbedding
 
 logger = get_logger(__name__)
 
@@ -72,6 +72,10 @@ class EmbeddingModelFactory:
                 f"Unsupported model: {model_name}. "
                 f"Supported models are: {list(cls._models.keys())}"
             )
+
+        if kwargs.get("openai_api_key") is None:
+            kwargs.pop("openai_api_key", None)
+
         return cls._models[model_name](model_name, *args, **kwargs)
 
     @classmethod
@@ -83,6 +87,11 @@ class EmbeddingModelFactory:
     def models(cls) -> Dict[str, Type[T]]:
         """Get a list of all registered model classes."""
         return cls._models
+
+    @classmethod
+    def get_default_model(cls):
+        """Get the default model name."""
+        return "jinaai/jina-embeddings-v3"
 
 
 class EmbeddingModel(ABC):
@@ -182,19 +191,19 @@ class OpenAIEmbeddingModel(EmbeddingModel):
         "text-embedding-ada-002": 1536,
     }
 
-    def __init__(self, model_name: str, api_key: str):
+    def __init__(self, model_name: str, openai_api_key: str):
         """
         Initialize the OpenAI embedding model.
 
         Args:
             model_name: Name of the OpenAI embedding model
-            api_key: OpenAI API key
+            openai_api_key: OpenAI API key
         """
         from openai import OpenAI
 
         self.model_name = model_name
         self._embedding_dimension = self.MODELS[model_name]
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=openai_api_key)
 
     def generate_embedding(self, text: str) -> CodeEmbedding:
         """Generate an embedding vector for the given text."""

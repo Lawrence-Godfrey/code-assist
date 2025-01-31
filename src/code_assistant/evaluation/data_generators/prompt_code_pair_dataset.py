@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 from uuid import uuid4
 
-from code_assistant.storage.code_store import CodebaseSnapshot, CodeUnit
+from code_assistant.storage.codebase import CodeUnit
+from code_assistant.storage.stores import CodeStore
 
 
 @dataclass
@@ -197,21 +198,21 @@ class PromptCodePairDataset:
 
     @classmethod
     def from_json(
-        cls, json_path: Path, codebase: CodebaseSnapshot
+        cls, json_path: Path, code_store: CodeStore
     ) -> "PromptCodePairDataset":
         """
         Load a dataset from a JSON file.
 
         Args:
             json_path: Path to the JSON file
-            codebase: CodebaseSnapshot to link code units
+            code_store: CodeStore to retrieve code units from
         """
         dataset = cls()
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         for pair_data in data:
-            code_unit = codebase.get_unit_by_id(pair_data["code_unit_id"])
+            code_unit = code_store.get_unit_by_id(pair_data["code_unit_id"])
             pair = PromptCodePair.from_dict(pair_data, code_unit)
             dataset.add_pair(pair)
 
@@ -299,14 +300,14 @@ class PromptCodePairDataset:
 
     @staticmethod
     def load_splits(
-        split_dir: Path, codebase: CodebaseSnapshot
+        split_dir: Path, code_store: CodeStore
     ) -> Dict[str, "PromptCodePairDataset"]:
         """
         Load previously created dataset splits.
 
         Args:
             split_dir: Directory containing the split datasets
-            codebase: Codebase to link code units
+            code_store: CodeStore to retrieve code units from
 
         Returns:
             Dictionary containing the available datasets with keys: 'train', 'validation' (if present), 'test'
@@ -324,13 +325,13 @@ class PromptCodePairDataset:
         if not test_path.exists():
             raise FileNotFoundError("Test dataset not found in splits directory")
 
-        splits["train"] = PromptCodePairDataset.from_json(train_path, codebase)
-        splits["test"] = PromptCodePairDataset.from_json(test_path, codebase)
+        splits["train"] = PromptCodePairDataset.from_json(train_path, code_store)
+        splits["test"] = PromptCodePairDataset.from_json(test_path, code_store)
 
         # Try loading validation dataset
         val_path = split_dir / "validate_prompt_code_pair_dataset.json"
         if val_path.exists():
-            splits["validation"] = PromptCodePairDataset.from_json(val_path, codebase)
+            splits["validation"] = PromptCodePairDataset.from_json(val_path, code_store)
 
         return splits
 

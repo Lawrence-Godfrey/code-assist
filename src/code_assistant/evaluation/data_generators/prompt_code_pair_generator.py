@@ -14,7 +14,8 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePair,
     PromptCodePairDataset,
 )
-from code_assistant.storage.code_store import CodebaseSnapshot, CodeUnit
+from code_assistant.storage.codebase import CodeUnit
+from code_assistant.storage.stores import CodeStore
 
 load_dotenv()
 
@@ -52,7 +53,7 @@ class AbstractPromptGenerator(ABC):
 
     def __init__(
         self,
-        codebase: CodebaseSnapshot,
+        code_store: CodeStore,
         output_path: Path = Path(
             os.path.expanduser(
                 "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
@@ -65,12 +66,12 @@ class AbstractPromptGenerator(ABC):
         Initialize the prompt generator.
 
         Args:
-            codebase: Snapshot of the codebase to generate prompts for
+            code_store: CodeStore object for accessing code units
             output_path: Path to save the generated dataset
             num_rows: Optional limit on number of rows to generate
             unit_types: Types of code units to process (defaults to function, method, class)
         """
-        self.codebase = codebase
+        self.code_store = code_store
         self.output_path = output_path
         self.num_rows = num_rows
         self.unit_types = unit_types or ["function", "method", "class"]
@@ -85,7 +86,7 @@ class AbstractPromptGenerator(ABC):
 
     def _filter_code_units(self) -> List[CodeUnit]:
         """Filter and limit code units based on configuration."""
-        filtered_units = self.codebase.get_units_by_type(self.unit_types)
+        filtered_units = self.code_store.get_units_by_type(self.unit_types)
 
         if self.num_rows is not None:
             if self.num_rows < len(filtered_units):
@@ -127,7 +128,7 @@ class OpenAIGenerator(AbstractPromptGenerator):
 
     def __init__(
         self,
-        codebase: CodebaseSnapshot,
+        code_store: CodeStore,
         openai_api_key: str,
         config: OpenAIConfig = None,
         output_path: Path = Path(
@@ -141,14 +142,14 @@ class OpenAIGenerator(AbstractPromptGenerator):
         """Initialize the OpenAI prompt generator.
 
         Args:
-            codebase: Snapshot of the codebase to generate prompts for
+            code_store: CodeStore object for accessing code units
             openai_api_key: OpenAI API key
             config: OpenAI configuration (defaults to default OpenAIConfig)
             output_path: Path to save the generated dataset
             num_rows: Optional limit on number of rows to generate
             unit_types: Types of code units to process
         """
-        super().__init__(codebase, output_path, num_rows, unit_types)
+        super().__init__(code_store, output_path, num_rows, unit_types)
         self.config = config or OpenAIConfig()
         self._client = AsyncOpenAI(api_key=openai_api_key)
 

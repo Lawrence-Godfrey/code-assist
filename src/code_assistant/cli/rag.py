@@ -1,11 +1,11 @@
-from pathlib import Path
+import os
 from typing import Optional
 
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.prompt.models import PromptModelFactory
 from code_assistant.rag.rag_engine import RAGEngine
-from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.storage.stores import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -16,8 +16,9 @@ class RagCommands:
     def prompt(
         self,
         query: str,
-        codebase_path: str,
-        embedding_model_name: str = "jinaai/jina-embeddings-v3",
+        codebase: str,
+        database_url: str = "mongodb://localhost:27017/",
+        embedding_model_name: str = EmbeddingModelFactory.get_default_model(),
         prompt_model_name: str = PromptModelFactory.get_default_model(),
         top_k: int = 5,
         threshold: Optional[float] = None,
@@ -28,7 +29,8 @@ class RagCommands:
 
         Args:
             query: The question or request about the codebase
-            codebase_path: Path to the JSON file containing embedded code units
+            codebase: Name of the codebase containing embedded code units
+            database_url: URL of the database containing embedded code units
             embedding_model_name: Name of the model to use for embeddings
             prompt_model_name: Name of the model to use for response generation
             top_k: Maximum number of similar code units to retrieve
@@ -37,9 +39,11 @@ class RagCommands:
         """
         LoggingConfig.enabled = logging_enabled
 
+        database_url = os.getenv("MONGODB_URL") or database_url
+
         # Load codebase
-        logger.info(f"Loading codebase from {codebase_path}")
-        codebase = CodebaseSnapshot.from_json(Path(codebase_path))
+        logger.info(f"Loading codebase from database: {database_url}")
+        code_store = MongoDBCodeStore(codebase, database_url)
 
         # Initialize embedding and prompt models
         embedding_model = EmbeddingModelFactory.create(embedding_model_name)
@@ -47,7 +51,7 @@ class RagCommands:
 
         # Initialize RAG engine
         engine = RAGEngine(
-            codebase=codebase,
+            code_store=code_store,
             embedding_model=embedding_model,
             prompt_model=prompt_model,
             top_k=top_k,
