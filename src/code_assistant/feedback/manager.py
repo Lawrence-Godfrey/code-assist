@@ -38,7 +38,7 @@ from typing import List
 from .interface import FeedbackInterface, FeedbackObserver
 from .models import FeedbackRequest, FeedbackResponse
 
-class FeedbackManager(FeedbackObserver):
+class FeedbackManager:
     """
     Orchestrates feedback collection and processing
 
