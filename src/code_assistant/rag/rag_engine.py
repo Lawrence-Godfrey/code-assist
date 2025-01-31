@@ -30,8 +30,8 @@ from openai import OpenAI
 
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores import CodeStore, SearchResult
 from code_assistant.prompt.models import PromptModel
+from code_assistant.storage.stores import CodeStore, SearchResult
 
 logger = get_logger(__name__)
 
