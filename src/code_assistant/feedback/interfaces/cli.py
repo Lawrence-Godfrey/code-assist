@@ -15,9 +15,10 @@ terminal. It also supports basic interaction features like cancellation through
 from rich.console import Console
 from rich.markdown import Markdown
 
+from code_assistant.feedback.exceptions import FeedbackCancelled
 from code_assistant.feedback.interface import FeedbackInterface
 from code_assistant.feedback.models import FeedbackRequest
-from code_assistant.feedback.exceptions import FeedbackCancelled
+
 
 class CLIFeedbackInterface(FeedbackInterface):
     """Command-line interface for collecting feedback."""
@@ -44,15 +45,13 @@ class CLIFeedbackInterface(FeedbackInterface):
         self._console.print("\n" + "=" * 80)
         self._console.print("[bold blue]Feedback Required[/bold blue]")
         self._console.print(Markdown(request.prompt))
-        self._console.print(
-            "\n[dim](Enter 'q' or 'quit' to cancel at any time)[/dim]"
-        )
+        self._console.print("\n[dim](Enter 'q' or 'quit' to cancel at any time)[/dim]")
 
         # Get user input
         response = input("\nYour response: ").strip()
 
         # Check for quit command
-        if response.lower() in ('q', 'quit'):
+        if response.lower() in ("q", "quit"):
             raise FeedbackCancelled("Feedback collection cancelled by user")
 
         return response

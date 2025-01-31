@@ -15,6 +15,7 @@ from code_assistant.feedback.mixins import FeedbackEnabled
 from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.step import PipelineStep
 from code_assistant.prompt.models import PromptModel
+
 from .schema import EffortLevel, RequirementsSchema, RiskLevel, TaskType
 
 logger = get_logger(__name__)
@@ -44,7 +45,7 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
         self._prompt_model = prompt_model
 
     def _analyze_requirements(
-            self, prompt: str, current_schema: Optional[RequirementsSchema] = None
+        self, prompt: str, current_schema: Optional[RequirementsSchema] = None
     ) -> Tuple[RequirementsSchema, Optional[str]]:
         """
         Use LLM to analyze requirements and generate feedback if needed.
@@ -117,7 +118,7 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
             response_content = self._prompt_model.generate_response(
                 system_prompt=system_prompt,
                 user_prompt=analysis_prompt,
-                temperature=0.1  # Low temperature for more consistent analysis
+                temperature=0.1,  # Low temperature for more consistent analysis
             )
             result = json.loads(response_content)
 
@@ -170,9 +171,9 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
                 "Please review the final requirements below and confirm if they are correct:\n\n"
                 f"{schema.to_markdown()}\n\n"
                 "Are these requirements correct? (yes/no)"
-            )
+            ),
         )
-        return response.lower().strip() in ('y', 'yes')
+        return response.lower().strip() in ("y", "yes")
 
     def execute(self, context: Dict) -> None:
         """
@@ -201,8 +202,7 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
         # Iteratively collect missing requirements through feedback
         while feedback_message:
             response = self.request_step_feedback(
-                context="requirements_gathering",
-                prompt=feedback_message
+                context="requirements_gathering", prompt=feedback_message
             )
 
             schema, feedback_message = self._analyze_requirements(
@@ -217,7 +217,7 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
         while not self._request_confirmation(schema):
             response = self.request_step_feedback(
                 context="requirements_update",
-                prompt="What would you like to change in these requirements?"
+                prompt="What would you like to change in these requirements?",
             )
 
             schema, feedback_message = self._analyze_requirements(

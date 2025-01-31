@@ -4,7 +4,6 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 from code_assistant.logging.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 T = TypeVar("T", bound="PromptModel")
@@ -115,11 +114,11 @@ class PromptModel(ABC):
 
     @abstractmethod
     def generate_response(
-            self,
-            system_prompt: str,
-            user_prompt: str,
-            temperature: float = 0.7,
-            max_tokens: Optional[int] = None
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """
         Generate a response from the model for the given prompts.
@@ -140,12 +139,7 @@ class PromptModel(ABC):
 
 
 @PromptModelFactory.register(
-    "gpt-4o",
-    "gpt-4o-mini",
-    "o1",
-    "o1-mini",
-    "gpt-4",
-    "gpt-3.5"
+    "gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "gpt-4", "gpt-3.5"
 )
 class OpenAIPromptModel(PromptModel):
     """OpenAI-specific implementation of the prompt model interface."""
@@ -173,11 +167,11 @@ class OpenAIPromptModel(PromptModel):
         self._client = OpenAI(api_key=api_key)
 
     def generate_response(
-            self,
-            system_prompt: str,
-            user_prompt: str,
-            temperature: float = 0.7,
-            max_tokens: Optional[int] = None
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """
         Generate a response using the OpenAI Chat Completions API.
@@ -204,9 +198,9 @@ class OpenAIPromptModel(PromptModel):
                 "model": self.model_name,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
-                "temperature": temperature
+                "temperature": temperature,
             }
 
             # Add max_tokens if specified
@@ -252,11 +246,11 @@ class AnthropicPromptModel(PromptModel):
         self._client = Anthropic(api_key=api_key)
 
     def generate_response(
-            self,
-            system_prompt: str,
-            user_prompt: str,
-            temperature: float = 0.7,
-            max_tokens: int = 1024  # Max tokens must be set for Anthropic
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,  # Max tokens must be set for Anthropic
     ) -> str:
         """
         Generate a response using the Anthropic API.
@@ -289,7 +283,7 @@ class AnthropicPromptModel(PromptModel):
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": combined_prompt}],
                 "max_tokens": max_tokens,
-                "temperature": temperature
+                "temperature": temperature,
             }
 
             # Make the API call
@@ -331,7 +325,4 @@ class DeepSeekPromptModel(OpenAIPromptModel):
             raise ValueError(error_msg)
 
         # Initialize OpenAI client with DeepSeek's base URL
-        self._client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
+        self._client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")

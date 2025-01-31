@@ -190,7 +190,9 @@ class RAGEngine:
         Returns:
             response_message (str): The generated response from the large LLM.
         """
-        system_prompt = "You are a helpful assistant with expertise in Python programming."
+        system_prompt = (
+            "You are a helpful assistant with expertise in Python programming."
+        )
         response = self._prompt_model.generate_response(
             system_prompt=system_prompt,
             user_prompt=prompt,

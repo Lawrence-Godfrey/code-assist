@@ -30,7 +30,8 @@ Note:
    FeedbackEnabled.__init__() with a FeedbackManager instance.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from .manager import FeedbackManager
 from .models import FeedbackRequest
 
@@ -48,10 +49,7 @@ class FeedbackEnabled:
         self._feedback_manager = feedback_manager
 
     def request_step_feedback(
-            self,
-            context: str,
-            prompt: str,
-            metadata: Optional[Dict[str, Any]] = None
+        self, context: str, prompt: str, metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Request feedback specific to this pipeline step.
@@ -64,11 +62,7 @@ class FeedbackEnabled:
         Returns:
             The user's response as a string
         """
-        request = FeedbackRequest(
-            context=context,
-            prompt=prompt,
-            metadata=metadata
-        )
+        request = FeedbackRequest(context=context, prompt=prompt, metadata=metadata)
 
         response = self._feedback_manager.request_feedback(request)
         return response.response

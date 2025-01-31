@@ -30,6 +30,7 @@ Example:
 
 from abc import ABC, abstractmethod
 from typing import Protocol
+
 from .models import FeedbackRequest, FeedbackResponse
 
 
@@ -43,6 +44,7 @@ class FeedbackObserver(Protocol):
     def on_feedback_received(self, response: FeedbackResponse) -> None:
         """Called when feedback is received."""
         ...
+
 
 class FeedbackInterface(ABC):
     """Abstract base class for different feedback interfaces."""

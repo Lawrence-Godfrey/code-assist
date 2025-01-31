@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Set
 
+
 class TaskType(Enum):
     """
     Types of tasks that the agent can perform.
@@ -37,6 +38,7 @@ class TaskType(Enum):
         INVESTIGATION: Analysis and research tasks
         IMPLEMENTATION: Code implementation tasks
     """
+
     DESIGN_DOCUMENT = "design document"
     INVESTIGATION = "investigation"
     IMPLEMENTATION = "implementation"
@@ -53,6 +55,7 @@ class RiskLevel(Enum):
     - HIGH: Significant impact on system operation
     - VERY_HIGH: Critical impact, could cause system failure
     """
+
     VERY_LOW = "very low"
     LOW = "low"
     MEDIUM = "medium"
@@ -71,6 +74,7 @@ class EffortLevel(Enum):
     - HIGH: Significant changes, complex implementation
     - VERY_HIGH: Major changes, highly complex implementation
     """
+
     VERY_LOW = "very low"
     LOW = "low"
     MEDIUM = "medium"
@@ -105,6 +109,7 @@ class RequirementsSchema:
         - effort: EffortLevel.LOW
         - focus_region: "pipeline/error_handling.py"
     """
+
     _task_type: Optional[TaskType] = field(default=None, init=False)
     _description: str = field(default="", init=False)
     _dod: List[str] = field(default_factory=list, init=False)
@@ -114,8 +119,7 @@ class RequirementsSchema:
 
     _present_fields: Set[str] = field(default_factory=set)
     _required_fields: Set[str] = field(
-        default_factory=lambda: {'task_type', 'description', 'dod', 'risk',
-                                 'effort'}
+        default_factory=lambda: {"task_type", "description", "dod", "risk", "effort"}
     )
 
     @property
@@ -126,7 +130,7 @@ class RequirementsSchema:
     def task_type(self, value: Optional[TaskType]):
         self._task_type = value
         if value is not None:
-            self._present_fields.add('task_type')
+            self._present_fields.add("task_type")
 
     @property
     def description(self) -> str:
@@ -136,7 +140,7 @@ class RequirementsSchema:
     def description(self, value: str):
         self._description = value
         if value:
-            self._present_fields.add('description')
+            self._present_fields.add("description")
 
     @property
     def dod(self) -> List[str]:
@@ -146,7 +150,7 @@ class RequirementsSchema:
     def dod(self, value: List[str]):
         self._dod = value
         if value:
-            self._present_fields.add('dod')
+            self._present_fields.add("dod")
 
     @property
     def risk(self) -> Optional[RiskLevel]:
@@ -156,7 +160,7 @@ class RequirementsSchema:
     def risk(self, value: Optional[RiskLevel]):
         self._risk = value
         if value is not None:
-            self._present_fields.add('risk')
+            self._present_fields.add("risk")
 
     @property
     def effort(self) -> Optional[EffortLevel]:
@@ -166,7 +170,7 @@ class RequirementsSchema:
     def effort(self, value: Optional[EffortLevel]):
         self._effort = value
         if value is not None:
-            self._present_fields.add('effort')
+            self._present_fields.add("effort")
 
     @property
     def focus_region(self) -> Optional[str]:
@@ -176,7 +180,7 @@ class RequirementsSchema:
     def focus_region(self, value: Optional[str]):
         self._focus_region = value
         if value is not None:
-            self._present_fields.add('focus_region')
+            self._present_fields.add("focus_region")
 
     def is_valid(self) -> bool:
         """Check if all required fields are present."""
@@ -194,24 +198,24 @@ class RequirementsSchema:
         """
         lines = ["# Task Requirements\n"]
 
-        if 'task_type' in self._present_fields:
+        if "task_type" in self._present_fields:
             lines.extend(["### Task Type", f"{self.task_type.value}\n"])
 
-        if 'description' in self._present_fields:
+        if "description" in self._present_fields:
             lines.extend(["### Description", f"{self.description}\n"])
 
-        if 'dod' in self._present_fields:
+        if "dod" in self._present_fields:
             lines.extend(["### Definition of Done"])
             lines.extend(f"- {item}" for item in self.dod)
             lines.append("")
 
-        if 'risk' in self._present_fields:
+        if "risk" in self._present_fields:
             lines.extend(["### Risk Level", f"{self.risk.value}\n"])
 
-        if 'effort' in self._present_fields:
+        if "effort" in self._present_fields:
             lines.extend(["### Effort Level", f"{self.effort.value}\n"])
 
-        if 'focus_region' in self._present_fields:
+        if "focus_region" in self._present_fields:
             lines.extend(["### Focus Region", f"{self.focus_region}\n"])
 
         return "\n".join(lines)

@@ -1,6 +1,7 @@
 """
 This module defines the base class for all pipeline steps.
 """
+
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 
@@ -11,7 +12,7 @@ class PipelineStep(ABC):
     def __init__(self) -> None:
         self._next_step: Optional[PipelineStep] = None
 
-    def set_next(self, step: 'PipelineStep') -> 'PipelineStep':
+    def set_next(self, step: "PipelineStep") -> "PipelineStep":
         """Set the next step in the pipeline."""
         self._next_step = step
         return step

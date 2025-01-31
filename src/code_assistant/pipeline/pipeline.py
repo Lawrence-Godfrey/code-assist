@@ -3,17 +3,17 @@ This module implements a pipeline for executing tasks, as requested by the user,
 in a defined set of steps. It uses the Chain of Responsibility pattern to process
 through multiple stages.
 """
+
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
-from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.feedback.interface import FeedbackInterface
 from code_assistant.feedback.interfaces.cli import CLIFeedbackInterface
+from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.logging.logger import get_logger
-from code_assistant.prompt.models import PromptModel
 from code_assistant.pipeline.requirements_gathering.step import RequirementsGatherer
 from code_assistant.pipeline.step import PipelineStep
-
+from code_assistant.prompt.models import PromptModel
 
 logger = get_logger(__name__)
 
@@ -25,9 +25,9 @@ class Pipeline(ABC):
     """
 
     def __init__(
-            self,
-            prompt_model: PromptModel,
-            feedback_interface: Optional[FeedbackInterface] = None,
+        self,
+        prompt_model: PromptModel,
+        feedback_interface: Optional[FeedbackInterface] = None,
     ) -> None:
         """
         Initialize the base pipeline.
@@ -89,8 +89,7 @@ class Pipeline(ABC):
 
         try:
             # Start execution with the first step
-            logger.info(
-                f"Starting pipeline execution with {len(self._steps)} steps")
+            logger.info(f"Starting pipeline execution with {len(self._steps)} steps")
             self._steps[0].execute(context)
             return context
         except Exception as e:
@@ -109,8 +108,7 @@ class AgentPipeline(Pipeline):
         """Initialize the agent pipeline steps."""
         # Initialize requirements gathering step
         requirements_gatherer = RequirementsGatherer(
-            prompt_model=self._prompt_model,
-            feedback_manager=self._feedback_manager
+            prompt_model=self._prompt_model, feedback_manager=self._feedback_manager
         )
 
         # Configure pipeline steps
