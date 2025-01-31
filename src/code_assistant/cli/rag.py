@@ -3,6 +3,7 @@ from typing import Optional
 
 from code_assistant.embedding.models.models import EmbeddingModelFactory
 from code_assistant.logging.logger import LoggingConfig, get_logger
+from code_assistant.prompt.models import PromptModelFactory
 from code_assistant.rag.rag_engine import RAGEngine
 from code_assistant.storage.code_store import CodebaseSnapshot
 
@@ -16,8 +17,8 @@ class RagCommands:
         self,
         query: str,
         codebase_path: str,
-        embedding_model: str = "jinaai/jina-embeddings-v3",
-        prompt_model: str = "gpt-4",
+        embedding_model_name: str = "jinaai/jina-embeddings-v3",
+        prompt_model_name: str = PromptModelFactory.get_default_model(),
         top_k: int = 5,
         threshold: Optional[float] = None,
         logging_enabled: bool = False,
@@ -28,8 +29,8 @@ class RagCommands:
         Args:
             query: The question or request about the codebase
             codebase_path: Path to the JSON file containing embedded code units
-            embedding_model: Name of the model to use for embeddings
-            prompt_model: Name of the LLM to use for response generation
+            embedding_model_name: Name of the model to use for embeddings
+            prompt_model_name: Name of the model to use for response generation
             top_k: Maximum number of similar code units to retrieve
             threshold: Minimum similarity score (0-1) for retrieved code
             logging_enabled: Whether to log detailed pipeline execution info
@@ -40,8 +41,9 @@ class RagCommands:
         logger.info(f"Loading codebase from {codebase_path}")
         codebase = CodebaseSnapshot.from_json(Path(codebase_path))
 
-        # Initialize embedding model
-        embedding_model = EmbeddingModelFactory.create(embedding_model)
+        # Initialize embedding and prompt models
+        embedding_model = EmbeddingModelFactory.create(embedding_model_name)
+        prompt_model = PromptModelFactory.create(prompt_model_name)
 
         # Initialize RAG engine
         engine = RAGEngine(
