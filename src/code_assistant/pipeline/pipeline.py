@@ -9,7 +9,9 @@ from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.feedback.interface import FeedbackInterface
 from code_assistant.feedback.interfaces.cli import CLIFeedbackInterface
 from code_assistant.logging.logger import get_logger
+from code_assistant.prompt.models import PromptModel
 from code_assistant.pipeline.requirements_gathering.step import RequirementsGatherer
+
 
 logger = get_logger(__name__)
 
@@ -22,16 +24,16 @@ class Pipeline:
 
     def __init__(
         self,
+        prompt_model: PromptModel,
         feedback_interface: Optional[FeedbackInterface] = None,
-        prompt_model: str = "gpt-4",
     ) -> None:
         """
         Initialise the pipeline with the defined steps.
 
         Args:
+            prompt_model: The model to use for LLM prompts
             feedback_interface: Optional custom feedback interface. If None,
                 defaults to CLIFeedbackInterface
-            prompt_model: The model to use for LLM prompts
         """
         # Initialize feedback system
         if feedback_interface is None:
@@ -41,8 +43,8 @@ class Pipeline:
 
         # Initialize pipeline steps
         self.requirements_step = RequirementsGatherer(
-            feedback_manager=self._feedback_manager,
-            prompt_model=prompt_model
+            prompt_model=prompt_model,
+            feedback_manager=self._feedback_manager
         )
 
         # Set up the pipeline chain

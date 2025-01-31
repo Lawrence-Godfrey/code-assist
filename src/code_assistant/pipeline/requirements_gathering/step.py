@@ -7,16 +7,14 @@ integrates with the feedback system, where we will correspond with the user if
 feedback is required and use an LLM to handle the validation.
 """
 
-import os
 import json
 from typing import Dict, Optional, Tuple
-
-from openai import OpenAI
 
 from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.feedback.mixins import FeedbackEnabled
 from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.step import PipelineStep
+from code_assistant.prompt.models import PromptModel
 from .schema import EffortLevel, RequirementsSchema, RiskLevel, TaskType
 
 logger = get_logger(__name__)
@@ -30,19 +28,19 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
 
     def __init__(
         self,
+        prompt_model: PromptModel,
         feedback_manager: FeedbackManager,
-        prompt_model: Optional[str] = "gpt-4",
-        openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY"),
     ) -> None:
+        """
+        Initialize the requirements gathering step.
+
+        Args:
+            prompt_model: The prompt model to use for requirements analysis
+            feedback_manager: The feedback manager for user interaction
+        """
+
         PipelineStep.__init__(self)
         FeedbackEnabled.__init__(self, feedback_manager)
-
-        # Initialise large LLM client. At this point, only OpenAI is available.
-        if prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
-            self._client = OpenAI(api_key=openai_api_key)
-        else:
-            raise ValueError(f"The model {prompt_model} is not supported.")
-
         self._prompt_model = prompt_model
 
     def _analyze_requirements(
@@ -115,17 +113,12 @@ class RequirementsGatherer(PipelineStep, FeedbackEnabled):
         """
 
         try:
-            response = self._client.chat.completions.create(
-                model=self._prompt_model,
-                messages=[
-                    {"role": "system",
-                     "content": "You are a requirements analysis assistant. Your task is to analyze prompts and extract structured requirements."},
-                    {"role": "user", "content": analysis_prompt}
-                ],
+            system_prompt = "You are a requirements analysis assistant. Your task is to analyze prompts and extract structured requirements."
+            response_content = self._prompt_model.generate_response(
+                system_prompt=system_prompt,
+                user_prompt=analysis_prompt,
                 temperature=0.1  # Low temperature for more consistent analysis
             )
-
-            response_content = response.choices[0].message.content
             result = json.loads(response_content)
 
             schema = RequirementsSchema()

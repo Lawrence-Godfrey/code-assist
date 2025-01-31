@@ -2,6 +2,7 @@
 
 from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.pipeline.pipeline import Pipeline
+from code_assistant.prompt.models import PromptModelFactory
 
 logger = get_logger(__name__)
 
@@ -12,7 +13,7 @@ class PipelineCommands:
     def start(
         self,
         prompt: str,
-        prompt_model: str = "gpt-4",
+        prompt_model_name: str = PromptModelFactory.get_default_model(),
         logging_enabled: bool = True,
     ) -> None:
         """
@@ -20,12 +21,14 @@ class PipelineCommands:
 
         Args:
             prompt: The task prompt to process
-            prompt_model: The model to use for LLM prompts
+            prompt_model_name: The model to use for LLM prompts
             logging_enabled: Whether to enable detailed logging
         """
         LoggingConfig.enabled = logging_enabled
 
         logger.info(f"Starting pipeline execution for prompt:\n{prompt}")
+
+        prompt_model = PromptModelFactory.create(prompt_model_name)
 
         pipeline = Pipeline(prompt_model=prompt_model)
         pipeline.execute(prompt)
