@@ -10,7 +10,14 @@ pip install code-assistant
 
 ## Usage
 
-The package provides a command-line interface with several subcommands:
+The package provides a command-line interface with several subcommands.
+It's generally easier to add secrets to a `.env` file in the project root directory than to pass them as arguments.
+
+Codebases are stored in a MongoDB database, although in future more storage options will be provided.
+
+The following environment variables can be set:
+- `MONGODB_URL`
+- `OPENAI_API_KEY`
 
 ### Extract Code from GitHub
 
@@ -18,7 +25,6 @@ The package provides a command-line interface with several subcommands:
 # Extract code from a GitHub repository
 code-assistant extract github \
     --repo-url="https://github.com/username/repo" \
-    --output-path="code_units.json" \
     --github-token="your_token"  # Optional, for private repos
 ```
 
@@ -28,14 +34,14 @@ code-assistant extract github \
 # Generate embeddings for code units
 code-assistant embed generate \
     --input-path="code_units.json" \
-    --output-path="embedded_code_units.json" \
-    --model-name="jinaai/jina-embeddings-v3"
+    --model-name="jinaai/jina-embeddings-v3" \
+    --codebase="your-codebase-name"
 
 # Compare a query against embedded code
 code-assistant embed compare \
     --query="How do I handle errors?" \
-    --input-path="embedded_code_units.json" \
-    --model-name="jinaai/jina-embeddings-v3"
+    --model-name="jinaai/jina-embeddings-v3" \
+    --codebase="your-codebase-name"
 ```
 
 ### Generate Training Data
@@ -43,7 +49,6 @@ code-assistant embed compare \
 ```bash
 # Generate prompt-code pairs using OpenAI
 code-assistant generate prompts \
-    --code-units-path="code_units.json" \
     --output-path="prompt_code_pairs.json" \
     --num-rows=100
 ```
@@ -58,12 +63,27 @@ code-assistant evaluate retrieval \
     --output-path="evaluation_results.json"
 ```
 
-## Environment Variables
+### RAG Prompt (End-to-End)
 
-The following environment variables can be set:
+**Basic usage**
+```bash
+code-assistant rag prompt \
+    --query="How do I handle errors in this codebase?" \
+    --codebase="your-codebase-name"
+```
 
-- `GITHUB_TOKEN`: GitHub personal access token for private repository access
-- `OPENAI_API_KEY`: OpenAI API key for generating prompts and embeddings
+**Advanced usage with all options**
+```bash
+code-assistant rag prompt \
+    --query="How do I handle errors?" \
+    --codebase-path="embedded_code_units.json" \
+    --embedding-model="jinaai/jina-embeddings-v3" \
+    --codebase="your-codebase-name" \
+    --prompt-model="gpt-4" \
+    --top-k=5 \
+    --threshold=0.5 \
+    --logging-enabled=True
+```
 
 ## Development
 

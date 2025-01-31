@@ -28,14 +28,9 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-from code_assistant.embedding.compare_embeddings import (
-    EmbeddingSimilaritySearch,
-    SearchResult,
-)
-from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.storage.stores import CodeStore, SearchResult
 
 logger = get_logger(__name__)
 
@@ -43,7 +38,7 @@ logger = get_logger(__name__)
 class RAGEngine:
     def __init__(
         self,
-        codebase: CodebaseSnapshot,
+        code_store: CodeStore,
         embedding_model: EmbeddingModel,
         prompt_model: Optional[str] = "gpt-4",
         top_k: Optional[int] = 5,
@@ -54,11 +49,10 @@ class RAGEngine:
         Initialises the RAG engine.
 
         Args:
-            codebase: CodebaseSnapshot object containing code units and their embeddings.
+            code_store: CodeStore object for accessing code units.
             prompt_model: Name of the large LLM model to use for response
                 generation. Defaults to "gpt-4".
-            embedding_model: Name of the model to use for generating embeddings.
-                Defaults to "jinaai/jina-embeddings-v3".
+            embedding_model: EmbeddingModel object used to generate the embeddings.
             top_k: Maximum number of similar code units to retrieve. Defaults to 5.
             threshold: Minimum similarity score (0-1) required for retrieved code
                 units. Defaults to None.
@@ -67,15 +61,12 @@ class RAGEngine:
            FileNotFoundError: If the code_units_path file cannot be found.
            ValueError: If an unsupported prompt_model is specified.
         """
+        self.code_store = code_store
         self._prompt_model = prompt_model
         self._top_k = top_k
         self._threshold = threshold
 
-        # Initialize embedder and similarity searcher
-        self._embedder = CodeEmbedder(embedding_model=embedding_model)
-        self._searcher = EmbeddingSimilaritySearch(
-            codebase=codebase, embedding_model=embedding_model
-        )
+        self._embedding_model = embedding_model
 
         # Initialise large LLM client. At this point, only OpenAI is available.
         if self._prompt_model in ("gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"):
@@ -117,11 +108,12 @@ class RAGEngine:
             similar_code_units (List[SearchResult]): The k most similar code
                 units to the query, in order from most similar to least similar.
         """
-        query_embedding = self._embedder.model.generate_embedding(query)
+        query_embedding = self._embedding_model.generate_embedding(query)
 
         # Find code units similar to the query
-        similar_code_units = self._searcher.find_similar(
-            query_embedding=query_embedding,
+        similar_code_units = self.code_store.vector_search(
+            query_embedding,
+            self._embedding_model,
             top_k=self._top_k,
             threshold=self._threshold,
         )

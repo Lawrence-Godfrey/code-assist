@@ -5,13 +5,12 @@ import numpy as np
 from tqdm import tqdm
 
 from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
-from code_assistant.embedding.generate_embeddings import CodeEmbedder
 from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.code_store import CodebaseSnapshot
+from code_assistant.storage.stores import CodeStore
 
 logger = get_logger(__name__)
 
@@ -48,7 +47,7 @@ class CodeRetrievalEvaluator:
 
     def __init__(
         self,
-        embedder: CodeEmbedder,
+        embedding_model: EmbeddingModel,
         test_dataset: PromptCodePairDataset,
         similarity_engine: EmbeddingSimilaritySearch,
         k_values: List[int] = None,
@@ -57,12 +56,12 @@ class CodeRetrievalEvaluator:
         Initialize the evaluator.
 
         Args:
-            embedder: Initialized CodeEmbedder instance
+            embedding_model: Initialized EmbeddingModel instance
             test_dataset: Dataset of prompt-code pairs for testing
             similarity_engine: Initialized EmbeddingSimilaritySearch instance
             k_values: List of K values for computing metrics (default: [1, 3, 5, 10])
         """
-        self.embedder = embedder
+        self.embedding_model = embedding_model
         self.test_dataset = test_dataset
         self.searcher = similarity_engine
         self.k_values = k_values or [1, 3, 5, 10]
@@ -124,7 +123,7 @@ class CodeRetrievalEvaluator:
         # Evaluate each prompt-code pair
         for pair in tqdm(self.test_dataset, desc="Evaluating retrieval"):
             # Generate prompt embedding
-            prompt_embedding = self.embedder.model.generate_embedding(pair.prompt)
+            prompt_embedding = self.embedding_model.generate_embedding(pair.prompt)
 
             # Get top K results
             results = self.searcher.find_similar(prompt_embedding, self.max_k)
@@ -157,7 +156,7 @@ class CodeRetrievalEvaluator:
 
         # Aggregate metrics
         metrics = RetrievalMetrics(
-            model_name=self.embedder.model.model_name,
+            model_name=self.embedding_model.model_name,
             mrr=self._compute_mrr(ranks),
             precision_at_k={
                 k: float(np.mean(precisions))
@@ -182,7 +181,7 @@ class MultiModelCodeRetrievalEvaluator:
     def __init__(
         self,
         test_dataset: PromptCodePairDataset,
-        codebase: CodebaseSnapshot,
+        code_store: CodeStore,
         models: List[EmbeddingModel],
         k_values: List[int] = None,
     ):
@@ -191,12 +190,12 @@ class MultiModelCodeRetrievalEvaluator:
 
         Args:
             test_dataset: Dataset of prompt-code pairs for testing
-            codebase: Full codebase with embedded code units
+            code_store: CodeStore object for accessing code units
             models: List of embedding models to evaluate
             k_values: List of K values for computing metrics
         """
         self.test_dataset = test_dataset
-        self.codebase = codebase
+        self.code_store = code_store
         self.k_values = k_values
         self.models = models
 
@@ -214,16 +213,13 @@ class MultiModelCodeRetrievalEvaluator:
 
                 logger.info(f"\nEvaluating model: {model.model_name}")
 
-                # Initialize embedder for current model
-                embedder = CodeEmbedder(embedding_model=model)
-
                 similarity_engine = EmbeddingSimilaritySearch(
-                    codebase=self.codebase, embedding_model=model
+                    code_store=self.code_store, embedding_model=model
                 )
 
                 # Create and run evaluator for current model
                 evaluator = CodeRetrievalEvaluator(
-                    embedder=embedder,
+                    embedding_model=model,
                     test_dataset=self.test_dataset,
                     similarity_engine=similarity_engine,
                     k_values=self.k_values,
