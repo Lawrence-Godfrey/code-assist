@@ -25,8 +25,8 @@ Requirements:
 
 from typing import List, Optional
 
-from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.models.prompt import PromptModel
 from code_assistant.storage.stores import CodeStore, SearchResult
 

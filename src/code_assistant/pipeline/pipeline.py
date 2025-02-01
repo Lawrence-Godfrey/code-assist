@@ -11,9 +11,9 @@ from code_assistant.feedback.interface import FeedbackInterface
 from code_assistant.feedback.interfaces.cli import CLIFeedbackInterface
 from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.prompt import PromptModel
 from code_assistant.pipeline.requirements_gathering.step import RequirementsGatherer
 from code_assistant.pipeline.step import PipelineStep
-from code_assistant.models.prompt import PromptModel
 
 logger = get_logger(__name__)
 

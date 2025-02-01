@@ -5,11 +5,11 @@ import numpy as np
 from tqdm import tqdm
 
 from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
-from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.storage.stores import CodeStore
 
 logger = get_logger(__name__)

@@ -7,12 +7,12 @@ from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import Model, ModelFactory
 from code_assistant.storage.codebase import CodeEmbedding
 
-
 logger = get_logger(__name__)
 
 
 class EmbeddingModel(Model, ABC):
     """Abstract base class for embedding models."""
+
     def __init__(self, model_name: str):
         """
         Initialize the embedding model.
@@ -86,7 +86,9 @@ class TransformersEmbeddingModel(EmbeddingModel):
 
             # Normalize embedding to unit length
             embedding = embeddings.cpu().numpy().flatten()
-            return CodeEmbedding(embedding / np.linalg.norm(embedding), self._model_name)
+            return CodeEmbedding(
+                embedding / np.linalg.norm(embedding), self._model_name
+            )
 
         except Exception as e:
             logger.error(f"Embedding generation error: {e}")
@@ -145,7 +147,9 @@ class OpenAIEmbeddingModel(EmbeddingModel):
             embedding = np.array(response.data[0].embedding)
 
             # OpenAI embeddings are already normalized, but for consistency...
-            return CodeEmbedding(embedding / np.linalg.norm(embedding), self._model_name)
+            return CodeEmbedding(
+                embedding / np.linalg.norm(embedding), self._model_name
+            )
 
         except Exception as e:
             logger.error(f"OpenAI embedding generation error: {e}")

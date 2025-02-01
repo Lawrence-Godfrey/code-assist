@@ -1,7 +1,6 @@
 from abc import ABC
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
-
 T = TypeVar("T", bound="Model")
 
 

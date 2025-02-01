@@ -5,7 +5,6 @@ from typing import Optional
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import Model, ModelFactory
 
-
 logger = get_logger(__name__)
 
 
@@ -28,11 +27,11 @@ class PromptModel(Model, ABC):
 
     @abstractmethod
     def generate_response(
-            self,
-            system_prompt: str,
-            user_prompt: str,
-            temperature: float = 0.7,
-            max_tokens: Optional[int] = None,
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """
         Generate a response from the model for the given prompts.
@@ -52,9 +51,7 @@ class PromptModel(Model, ABC):
         pass
 
 
-@ModelFactory.register(
-    "gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "gpt-4", "gpt-3.5"
-)
+@ModelFactory.register("gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "gpt-4", "gpt-3.5")
 class OpenAIPromptModel(PromptModel):
     """OpenAI-specific implementation of the prompt model interface."""
 

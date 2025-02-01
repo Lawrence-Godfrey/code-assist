@@ -1,8 +1,8 @@
 """Command line interface for executing an agent task pipeline"""
 
 from code_assistant.logging.logger import LoggingConfig, get_logger
-from code_assistant.pipeline.pipeline import AgentPipeline
 from code_assistant.models.factory import ModelFactory
+from code_assistant.pipeline.pipeline import AgentPipeline
 
 logger = get_logger(__name__)
 

@@ -2,8 +2,8 @@ import os
 from typing import Optional
 
 from code_assistant.embedding.code_embedder import CodeEmbedder
-from code_assistant.models.factory import ModelFactory
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.factory import ModelFactory
 from code_assistant.storage.stores import CodeStore, MongoDBCodeStore
 
 logger = get_logger(__name__)
