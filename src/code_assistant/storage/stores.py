@@ -10,7 +10,7 @@ from pymongo.results import DeleteResult
 from pymongo.synchronous.command_cursor import CommandCursor
 from pymongo.synchronous.cursor import Cursor
 
-from code_assistant.embedding.models.models import EmbeddingModel
+from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.codebase import (
     Class,

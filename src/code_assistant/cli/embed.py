@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 from code_assistant.embedding.code_embedder import CodeEmbedder
-from code_assistant.embedding.models.models import EmbeddingModelFactory
+from code_assistant.models.factory import ModelFactory
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.stores import CodeStore, MongoDBCodeStore
 
@@ -17,7 +17,6 @@ class EmbedCommands:
         codebase: str,
         database_url: str,
         model_name: str,
-        openai_api_key: Optional[str] = None,
     ) -> None:
         """
         Generate embeddings for code units from a codebase.
@@ -26,12 +25,11 @@ class EmbedCommands:
             codebase: Name of the codebase to embed.
             database_url: URL for MongoDB database to store code units
             model_name: Name of the Hugging Face model to use for embeddings
-            openai_api_key: OpenAI API key for OpenAI models
         """
 
         code_store = self._setup_code_store(codebase, database_url)
 
-        model = EmbeddingModelFactory.create(model_name, openai_api_key=openai_api_key)
+        model = ModelFactory.create(model_name)
 
         # Generate embeddings
         logger.info("Generating embeddings...")
@@ -48,8 +46,7 @@ class EmbedCommands:
         self,
         codebase: str,
         database_url: str = "mongodb://localhost:27017/",
-        model_name: str = EmbeddingModelFactory.get_default_model(),
-        openai_api_key: str = os.getenv("OPENAI_API_KEY"),
+        model_name: str = ModelFactory.get_default_embedding_model(),
     ) -> None:
         """Generate embeddings for code units."""
 
@@ -59,7 +56,6 @@ class EmbedCommands:
             codebase=codebase,
             database_url=database_url,
             model_name=model_name,
-            openai_api_key=openai_api_key,
         )
 
     def compare(
@@ -67,7 +63,7 @@ class EmbedCommands:
         codebase: str,
         query: str,
         database_url: str = "mongodb://localhost:27017/",
-        model_name: str = EmbeddingModelFactory.get_default_model(),
+        model_name: str = ModelFactory.get_default_embedding_model(),
         top_k: int = 5,
         threshold: Optional[float] = None,
     ) -> None:
@@ -77,7 +73,7 @@ class EmbedCommands:
 
         code_store = self._setup_code_store(codebase, database_url)
 
-        embedding_model = EmbeddingModelFactory.create(model_name)
+        embedding_model = ModelFactory.create(model_name)
 
         query_embedding = embedding_model.generate_embedding(query)
 

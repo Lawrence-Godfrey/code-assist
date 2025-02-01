@@ -14,7 +14,7 @@ from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.feedback.mixins import FeedbackEnabled
 from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.step import PipelineStep
-from code_assistant.prompt.models import PromptModel
+from code_assistant.models.prompt import PromptModel
 
 from .schema import EffortLevel, RequirementsSchema, RiskLevel, TaskType
 

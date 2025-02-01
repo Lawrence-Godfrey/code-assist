@@ -3,10 +3,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from code_assistant.embedding.models.models import (
-    EmbeddingModelFactory,
-    OpenAIEmbeddingModel,
-)
+from code_assistant.models.factory import ModelFactory
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
@@ -25,7 +22,6 @@ class EvaluateCommands:
         codebase: str,
         database_url: str = "mongodb://localhost:27017/",
         output_path: Optional[str] = None,
-        openai_api_key: Optional[str] = None,
     ) -> None:
         """Evaluate retrieval performance across models."""
 
@@ -36,15 +32,10 @@ class EvaluateCommands:
         test_dataset = PromptCodePairDataset.from_json(Path(test_data_path), code_store)
 
         models = []
-        model_classes = EmbeddingModelFactory.models()
+        model_classes = ModelFactory.models()
         for model_name, cls in model_classes.items():
-            if issubclass(cls, OpenAIEmbeddingModel):
-                if openai_api_key:
-                    model = cls(model_name=model_name, openai_api_key=openai_api_key)
-                    models.append(model)
-            else:
-                model = cls(model_name=model_name)
-                models.append(model)
+            model = cls(model_name=model_name)
+            models.append(model)
 
         evaluator = MultiModelCodeRetrievalEvaluator(
             test_dataset=test_dataset, code_store=code_store, models=models

@@ -109,7 +109,7 @@ class OpenAIPromptModel(PromptModel):
         try:
             # Prepare the API call parameters
             params = {
-                "model": self.model_name,
+                "model": self._model_name,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -194,7 +194,7 @@ class AnthropicPromptModel(PromptModel):
 
             # Prepare the API call parameters
             params = {
-                "model": self.model_name,
+                "model": self._model_name,
                 "messages": [{"role": "user", "content": combined_prompt}],
                 "max_tokens": max_tokens,
                 "temperature": temperature,

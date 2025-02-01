@@ -1,9 +1,8 @@
 import os
 from typing import Optional
 
-from code_assistant.embedding.models.models import EmbeddingModelFactory
+from code_assistant.models.factory import ModelFactory
 from code_assistant.logging.logger import LoggingConfig, get_logger
-from code_assistant.prompt.models import PromptModelFactory
 from code_assistant.rag.rag_engine import RAGEngine
 from code_assistant.storage.stores import MongoDBCodeStore
 
@@ -18,8 +17,8 @@ class RagCommands:
         query: str,
         codebase: str,
         database_url: str = "mongodb://localhost:27017/",
-        embedding_model_name: str = EmbeddingModelFactory.get_default_model(),
-        prompt_model_name: str = PromptModelFactory.get_default_model(),
+        embedding_model_name: str = ModelFactory.get_default_embedding_model(),
+        prompt_model_name: str = ModelFactory.get_default_prompt_model(),
         top_k: int = 5,
         threshold: Optional[float] = None,
         logging_enabled: bool = False,
@@ -46,8 +45,8 @@ class RagCommands:
         code_store = MongoDBCodeStore(codebase, database_url)
 
         # Initialize embedding and prompt models
-        embedding_model = EmbeddingModelFactory.create(embedding_model_name)
-        prompt_model = PromptModelFactory.create(prompt_model_name)
+        embedding_model = ModelFactory.create(embedding_model_name)
+        prompt_model = ModelFactory.create(prompt_model_name)
 
         # Initialize RAG engine
         engine = RAGEngine(

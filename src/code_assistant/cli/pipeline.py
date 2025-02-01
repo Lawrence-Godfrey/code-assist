@@ -2,7 +2,7 @@
 
 from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.pipeline.pipeline import AgentPipeline
-from code_assistant.prompt.models import PromptModelFactory
+from code_assistant.models.factory import ModelFactory
 
 logger = get_logger(__name__)
 
@@ -13,7 +13,7 @@ class PipelineCommands:
     def start(
         self,
         prompt: str,
-        prompt_model_name: str = PromptModelFactory.get_default_model(),
+        prompt_model_name: str = ModelFactory.get_default_prompt_model(),
         logging_enabled: bool = True,
     ) -> None:
         """
@@ -28,7 +28,7 @@ class PipelineCommands:
 
         logger.info(f"Starting pipeline execution for prompt:\n{prompt}")
 
-        prompt_model = PromptModelFactory.create(prompt_model_name)
+        prompt_model = ModelFactory.create(prompt_model_name)
 
         pipeline = AgentPipeline(prompt_model=prompt_model)
         pipeline.execute(prompt)

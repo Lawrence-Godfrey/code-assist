@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 from code_assistant.embedding.compare_embeddings import EmbeddingSimilaritySearch
-from code_assistant.embedding.models.models import EmbeddingModel
+from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
