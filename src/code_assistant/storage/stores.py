@@ -221,12 +221,17 @@ class CodebaseFilteredCollection:
     ) -> CommandCursor[Mapping[str, Any] | Any]:
         """Override aggregate to include codebase filter in $match stage."""
         if self._codebase is not None:
-            # Add codebase filter as first stage if pipeline doesn't start with $match
-            if not pipeline or "$match" not in pipeline[0]:
-                pipeline.insert(0, {"$match": {"codebase": self._codebase}})
-            # Add to existing $match stage if it exists
-            elif "$match" in pipeline[0]:
-                pipeline[0]["$match"]["codebase"] = self._codebase
+            # Special handling for $vectorSearch - it must be first
+            if pipeline and "$vectorSearch" in pipeline[0]:
+                # Add codebase filter after $vectorSearch
+                pipeline.insert(1, {"$match": {"codebase": self._codebase}})
+            else:
+                # Add codebase filter as first stage if pipeline doesn't start with $match
+                if not pipeline or "$match" not in pipeline[0]:
+                    pipeline.insert(0, {"$match": {"codebase": self._codebase}})
+                # Add to existing $match stage if it exists
+                elif "$match" in pipeline[0]:
+                    pipeline[0]["$match"]["codebase"] = self._codebase
 
         # Handle projection
         projection = kwargs.pop("projection", {})
@@ -244,7 +249,11 @@ class CodebaseFilteredCollection:
             }
         )
         proj_dict = self._get_projection(projection, include_db_id)
-        proj_dict["score"] = {"$meta": "vectorSearchScore"}
+
+        # Only include vectorSearchScore if we're doing a vector search
+        if any("$vectorSearch" in stage for stage in pipeline):
+            proj_dict["score"] = {"$meta": "vectorSearchScore"}
+
         # Add projection as final stage of pipeline
         pipeline.append({"$project": proj_dict})
 
@@ -503,8 +512,16 @@ class MongoDBCodeStore(DatabaseCodeStore):
             }
         ]
 
+        # Add threshold filter after vectorSearch if specified
         if threshold:
-            pipeline.append({"$match": {"score": {"$gte": threshold}}})
+            pipeline.append(
+                {
+                    "$match": {
+                        "$expr": {"$gte": [{"$meta": "vectorSearchScore"}, threshold]}
+                    }
+                }
+            )
+
         results = []
         for doc in self.code_units.aggregate(pipeline):
             score = doc.pop("score")
