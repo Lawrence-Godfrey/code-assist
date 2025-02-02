@@ -29,18 +29,18 @@ class EmbedCommands:
 
         code_store = self._setup_code_store(codebase, database_url)
 
-        model = ModelFactory.create(model_name)
+        embedding_model = ModelFactory.create(model_name)
 
         # Generate embeddings
         logger.info("Generating embeddings...")
-        code_embedder = CodeEmbedder(embedding_model=model)
+        code_embedder = CodeEmbedder(embedding_model=embedding_model)
         units_processed = code_embedder.embed_code_units(code_store)
 
         code_store.refresh_vector_indexes()
 
         # Print statistics
         logger.info(f"Total code units processed: {units_processed}")
-        logger.info(f"Embedding dimension: {model.embedding_dimension}")
+        logger.info(f"Embedding dimension: {embedding_model.embedding_dimension}")
 
     def generate(
         self,

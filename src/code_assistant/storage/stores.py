@@ -296,7 +296,7 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
         # Single collection for all code units
         self.code_units: CodebaseFilteredCollection = CodebaseFilteredCollection(
-            self.db.code_units
+            self.db.code_units, self.codebase
         )
 
         self._setup_indexes()
