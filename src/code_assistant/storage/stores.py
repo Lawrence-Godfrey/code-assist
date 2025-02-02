@@ -10,8 +10,8 @@ from pymongo.results import DeleteResult
 from pymongo.synchronous.command_cursor import CommandCursor
 from pymongo.synchronous.cursor import Cursor
 
-from code_assistant.embedding.models.models import EmbeddingModel
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.storage.codebase import (
     Class,
     CodeEmbedding,
@@ -296,7 +296,7 @@ class MongoDBCodeStore(DatabaseCodeStore):
 
         # Single collection for all code units
         self.code_units: CodebaseFilteredCollection = CodebaseFilteredCollection(
-            self.db.code_units
+            self.db.code_units, self.codebase
         )
 
         self._setup_indexes()

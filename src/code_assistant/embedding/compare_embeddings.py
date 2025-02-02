@@ -2,7 +2,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from code_assistant.embedding.models.models import EmbeddingModel
+from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.storage.codebase import CodeEmbedding, CodeUnit
 from code_assistant.storage.stores import CodeStore, SearchResult
 

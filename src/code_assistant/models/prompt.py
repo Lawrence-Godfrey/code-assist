@@ -1,96 +1,14 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Type, TypeVar
+from typing import Optional
 
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.factory import Model, ModelFactory
 
 logger = get_logger(__name__)
 
-T = TypeVar("T", bound="PromptModel")
 
-
-class PromptModelFactory:
-    """
-    Factory for creating prompt model instances.
-
-    This factory manages the registration and creation of prompt models,
-    ensuring that model names are mapped to their correct implementations.
-    """
-
-    _models: Dict[str, Type[T]] = {}
-
-    @classmethod
-    def register(cls, *names: str) -> Callable[[Type[T]], Type[T]]:
-        """
-        Decorator to register a model class with its supported model names.
-
-        Args:
-            *names: Variable number of model names that this class supports
-
-        Returns:
-            Decorator function that registers the model class
-        """
-
-        def decorator(model_class: Type[T]) -> Type[T]:
-            for name in names:
-                cls._models[name] = model_class
-            return model_class
-
-        return decorator
-
-    @classmethod
-    def model(cls, model_name: str) -> Optional[Type[T]]:
-        """
-        Get the registered model class for a given model name.
-
-        Args:
-            model_name: Name of the model to look up
-
-        Returns:
-            The model class if registered, None otherwise
-        """
-        return cls._models.get(model_name)
-
-    @classmethod
-    def create(cls, model_name: str, *args: Any, **kwargs: Any) -> T:
-        """
-        Create and return an appropriate prompt model instance.
-
-        Args:
-            model_name: Name of the model to create
-            *args: Variable length argument list to pass to the model constructor
-            **kwargs: Arbitrary keyword arguments to pass to the model constructor
-
-        Returns:
-            An instance of PromptModel
-
-        Raises:
-            ValueError: If model_name is not provided or model is not supported
-        """
-        if model_name not in cls._models:
-            raise ValueError(
-                f"Unsupported model: {model_name}. "
-                f"Supported models are: {list(cls._models.keys())}"
-            )
-        return cls._models[model_name](model_name, *args, **kwargs)
-
-    @classmethod
-    def list_models(cls) -> list[str]:
-        """Get a list of all registered model names."""
-        return list(cls._models.keys())
-
-    @classmethod
-    def models(cls) -> Dict[str, Type[T]]:
-        """Get a list of all registered model classes."""
-        return cls._models
-
-    @classmethod
-    def get_default_model(cls):
-        """Get the default model name."""
-        return "gpt-4"
-
-
-class PromptModel(ABC):
+class PromptModel(Model, ABC):
     """
     Abstract base class for all prompt models.
 
@@ -105,12 +23,7 @@ class PromptModel(ABC):
         Args:
             model_name: Name of the specific model to use
         """
-        self._model_name = model_name
-
-    @property
-    def model_name(self) -> str:
-        """Get the name of the model being used."""
-        return self._model_name
+        super().__init__(model_name)
 
     @abstractmethod
     def generate_response(
@@ -138,9 +51,7 @@ class PromptModel(ABC):
         pass
 
 
-@PromptModelFactory.register(
-    "gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "gpt-4", "gpt-3.5"
-)
+@ModelFactory.register("gpt-4o", "gpt-4o-mini", "o1", "o1-mini", "gpt-4", "gpt-3.5")
 class OpenAIPromptModel(PromptModel):
     """OpenAI-specific implementation of the prompt model interface."""
 
@@ -195,7 +106,7 @@ class OpenAIPromptModel(PromptModel):
         try:
             # Prepare the API call parameters
             params = {
-                "model": self.model_name,
+                "model": self._model_name,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -219,7 +130,7 @@ class OpenAIPromptModel(PromptModel):
             raise RuntimeError(f"OpenAI API call failed: {str(e)}") from e
 
 
-@PromptModelFactory.register("claude-3-5-sonnet-20241022")
+@ModelFactory.register("claude-3-5-sonnet-20241022")
 class AnthropicPromptModel(PromptModel):
     """Anthropic-specific implementation of the prompt model interface."""
 
@@ -280,7 +191,7 @@ class AnthropicPromptModel(PromptModel):
 
             # Prepare the API call parameters
             params = {
-                "model": self.model_name,
+                "model": self._model_name,
                 "messages": [{"role": "user", "content": combined_prompt}],
                 "max_tokens": max_tokens,
                 "temperature": temperature,
@@ -296,7 +207,7 @@ class AnthropicPromptModel(PromptModel):
             raise RuntimeError(f"Anthropic API call failed: {str(e)}") from e
 
 
-@PromptModelFactory.register("deepseek-chat", "deepseek-reasoner")
+@ModelFactory.register("deepseek-chat", "deepseek-reasoner")
 class DeepSeekPromptModel(OpenAIPromptModel):
     """
     DeepSeek-specific implementation of the prompt model interface.
