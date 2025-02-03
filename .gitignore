@@ -3,3 +3,5 @@
 .env
 *.egg-info
 diagrams
+__pycache__
+.DS_Store
