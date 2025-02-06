@@ -68,7 +68,7 @@ class CodeStore(ABC):
         pass
 
     @abstractmethod
-    def refresh_vector_indexes(self) -> None:
+    def refresh_vector_indexes(self, force_recreate=False) -> None:
         """Recreate vector search indexes for all embedding models."""
         pass
 
@@ -216,15 +216,22 @@ class CodebaseFilteredCollection:
             self._add_codebase_filter(filter_dict), *args, **kwargs
         )
 
+    def drop_search_index(self, index_name: str, *args, **kwargs) -> None:
+        """Drop an index from the collection."""
+        return self._collection.drop_search_index(index_name, *args, **kwargs)
+
     def aggregate(
         self, pipeline: List[Dict], include_db_id=False, *args, **kwargs
     ) -> CommandCursor[Mapping[str, Any] | Any]:
         """Override aggregate to include codebase filter in $match stage."""
-        if self._codebase is not None:
-            # Add codebase filter as first stage if pipeline doesn't start with $match
+        # For vector search, we'll handle the codebase filter differently
+        # The calling method should include it in the $vectorSearch stage
+        is_vector_search = pipeline and "$vectorSearch" in pipeline[0]
+
+        if self._codebase is not None and not is_vector_search:
+            # Regular aggregation pipeline handling
             if not pipeline or "$match" not in pipeline[0]:
                 pipeline.insert(0, {"$match": {"codebase": self._codebase}})
-            # Add to existing $match stage if it exists
             elif "$match" in pipeline[0]:
                 pipeline[0]["$match"]["codebase"] = self._codebase
 
@@ -244,7 +251,11 @@ class CodebaseFilteredCollection:
             }
         )
         proj_dict = self._get_projection(projection, include_db_id)
-        proj_dict["score"] = {"$meta": "vectorSearchScore"}
+
+        # Only include vectorSearchScore if we're doing a vector search
+        if is_vector_search:
+            proj_dict["score"] = {"$meta": "vectorSearchScore"}
+
         # Add projection as final stage of pipeline
         pipeline.append({"$project": proj_dict})
 
@@ -310,8 +321,14 @@ class MongoDBCodeStore(DatabaseCodeStore):
         self.code_units.create_index("codebase")
         self.code_units.create_index([("unit_type", 1), ("codebase", 1)])
 
-    def refresh_vector_indexes(self) -> None:
-        """Recreate vector search indexes for all embedding models."""
+    def refresh_vector_indexes(self, force_recreate=False) -> None:
+        """
+        Recreate vector search indexes for all embedding models.
+
+        Args:
+            force_recreate: If True, recreate the indexes even if they already
+                exist. This can be useful if the index needs to be updated.
+        """
         # find unique model names
         model_names = dict()
         for doc in self.code_units.find({"embeddings": {"$exists": True}}):
@@ -319,11 +336,14 @@ class MongoDBCodeStore(DatabaseCodeStore):
                 model_names[model_name] = len(doc["embeddings"][model_name]["vector"])
 
         for model_name, dimensions in model_names.items():
-            self._ensure_vector_index(model_name, dimensions)
+            self._ensure_vector_index(model_name, dimensions, force_recreate)
 
-    def _ensure_vector_index(self, model_name: str, dimensions: int) -> None:
+    def _ensure_vector_index(
+        self, model_name: str, dimensions: int, force_recreate: bool
+    ) -> None:
         """
         Create vector search index for a specific model if it doesn't exist.
+        Include codebase field in the index for filtering.
 
         Args:
             model_name: Name of the embedding model
@@ -336,22 +356,14 @@ class MongoDBCodeStore(DatabaseCodeStore):
             for index in existing_indices
         )
 
-        if not index_exists:
-            vector_path = f"embeddings.{model_name}.vector"
-            search_index = SearchIndexModel(
-                definition={
-                    "fields": [
-                        {
-                            "type": "vector",
-                            "path": vector_path,
-                            "numDimensions": dimensions,
-                            "similarity": "cosine",
-                        }
-                    ]
-                },
-                name=f"vector_index_{model_name.replace('/', '_')}",
-                type="vectorSearch",
+        if index_exists and force_recreate:
+            self.code_units.drop_search_index(
+                f"vector_index_{model_name.replace('/', '_')}"
             )
+            index_exists = False
+
+        if not index_exists:
+            search_index = self._build_vector_index(model_name, dimensions)
 
             try:
                 logger.info(f"Creating vector index for model {model_name}")
@@ -371,6 +383,41 @@ class MongoDBCodeStore(DatabaseCodeStore):
                 logger.warning(
                     f"Could not create vector search index for {model_name}: {str(e)}"
                 )
+
+    def _build_vector_index(self, model_name: str, dimensions: int) -> SearchIndexModel:
+        """
+        Create a search index for vector similarity search.
+
+        Args:
+            model_name: Name of the embedding model
+            dimensions: Number of dimensions in the embedding vector
+
+        Returns:
+            SearchIndexModel object for the vector search index
+        """
+
+        vector_path = f"embeddings.{model_name}.vector"
+        search_index = SearchIndexModel(
+            definition={
+                "fields": [
+                    {
+                        "type": "vector",
+                        "path": vector_path,
+                        "numDimensions": dimensions,
+                        "similarity": "cosine",
+                    },
+                    # Add codebase field for filtering
+                    {
+                        "type": "filter",
+                        "path": "codebase",
+                    },
+                ]
+            },
+            name=f"vector_index_{model_name.replace('/', '_')}",
+            type="vectorSearch",
+        )
+
+        return search_index
 
     def save_unit(self, unit: CodeUnit) -> None:
         """
@@ -484,13 +531,13 @@ class MongoDBCodeStore(DatabaseCodeStore):
         top_k: int = 5,
         threshold: Optional[float] = None,
     ) -> List[SearchResult]:
-        """Perform vector similarity search across all code units."""
-
+        """Perform vector similarity search across all code units within the codebase."""
         # Use model-specific index
         index_name = f"vector_index_{embedding.model_name.replace('/', '_')}"
         vector_path = f"embeddings.{embedding.model_name}.vector"
         query_vector = embedding.vector.astype(float).tolist()
 
+        # Include codebase filter in the vectorSearch pre-filter
         pipeline = [
             {
                 "$vectorSearch": {
@@ -499,12 +546,21 @@ class MongoDBCodeStore(DatabaseCodeStore):
                     "queryVector": query_vector,
                     "numCandidates": top_k * 10,
                     "limit": top_k,
+                    "filter": {"codebase": self.codebase},  # Restrict to this codebase
                 }
             }
         ]
 
+        # Add threshold filter if specified
         if threshold:
-            pipeline.append({"$match": {"score": {"$gte": threshold}}})
+            pipeline.append(
+                {
+                    "$match": {
+                        "$expr": {"$gte": [{"$meta": "vectorSearchScore"}, threshold]}
+                    }
+                }
+            )
+
         results = []
         for doc in self.code_units.aggregate(pipeline):
             score = doc.pop("score")
