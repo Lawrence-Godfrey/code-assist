@@ -10,7 +10,7 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
 )
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.embedding import EmbeddingModel
-from code_assistant.storage.stores import CodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -127,11 +127,11 @@ class CodeRetrievalEvaluator:
 
             # Get top K results
             results = self.searcher.find_similar(prompt_embedding, self.max_k)
-            retrieved_ids = [r.code_unit.id for r in results]
+            retrieved_ids = [r.item.id for r in results]
 
             # Record similarity scores
             for result in results:
-                if result.code_unit.id == pair.code_unit.id:
+                if result.item.id == pair.code_unit.id:
                     similarities_correct.append(result.similarity_score)
                 else:
                     similarities_incorrect.append(result.similarity_score)
@@ -181,7 +181,7 @@ class MultiModelCodeRetrievalEvaluator:
     def __init__(
         self,
         test_dataset: PromptCodePairDataset,
-        code_store: CodeStore,
+        code_store: MongoDBCodeStore,
         models: List[EmbeddingModel],
         k_values: List[int] = None,
     ):

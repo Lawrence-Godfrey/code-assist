@@ -6,7 +6,7 @@ from code_assistant.data_extraction.extractors.github_code_extractor import (
     GitHubCodeExtractor,
 )
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores import MongoDBCodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 logger = get_logger(__name__)
 

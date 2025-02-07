@@ -10,13 +10,10 @@ import uuid
 from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Iterator, List, Optional, Union
-
-import numpy as np
+from typing import Dict, Optional
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores.base import EmbeddingUnit
-
+from code_assistant.storage.types import EmbeddingUnit
 
 logger = get_logger(__name__)
 
@@ -50,7 +47,7 @@ class Document(ABC):
                 model_name: embedding.to_dict()
                 for model_name, embedding in self.embeddings.items()
             },
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
     @classmethod
@@ -84,14 +81,12 @@ class ConfluencePage(Document):
     def to_dict(self) -> dict:
         """Convert the Confluence page to a dictionary."""
         result = super().to_dict()
-        result.update({
-            "parent_id": self.parent_id,
-            "version": self.version,
-            "url": self.url
-        })
+        result.update(
+            {"parent_id": self.parent_id, "version": self.version, "url": self.url}
+        )
         return result
 
-# TODO: Deal with duplication here
+    # TODO: Deal with duplication here
     @classmethod
     def from_dict(cls, data: dict) -> "ConfluencePage":
         """Create a ConfluencePage from a dictionary."""
@@ -125,11 +120,9 @@ class ConfluenceAttachment(Document):
     def to_dict(self) -> dict:
         """Convert the Confluence attachment to a dictionary."""
         result = super().to_dict()
-        result.update({
-            "page_id": self.page_id,
-            "file_type": self.file_type,
-            "size": self.size
-        })
+        result.update(
+            {"page_id": self.page_id, "file_type": self.file_type, "size": self.size}
+        )
         return result
 
     @classmethod

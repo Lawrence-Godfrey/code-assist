@@ -4,7 +4,7 @@ from typing import Optional
 from code_assistant.embedding.code_embedder import CodeEmbedder
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import ModelFactory
-from code_assistant.storage.stores import CodeStore, MongoDBCodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -94,11 +94,11 @@ class EmbedCommands:
         self,
         codebase: str,
         database_url: str,
-    ) -> CodeStore:
+    ) -> MongoDBCodeStore:
         logger.info(f"Loading code units from {database_url}...")
         code_store = MongoDBCodeStore(codebase=codebase, connection_string=database_url)
 
-        if not code_store.codebase_exists():
+        if not code_store.namespace_exists():
             raise ValueError(f"Codebase {codebase} does not exist.")
 
         return code_store

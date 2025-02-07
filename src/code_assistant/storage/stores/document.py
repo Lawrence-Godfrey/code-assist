@@ -14,12 +14,8 @@ from pymongo.operations import SearchIndexModel
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.storage.document import Document
-from code_assistant.storage.stores.base import (
-    FilteredCollection,
-    StorageBase,
-    SearchResult,
-    EmbeddingUnit,
-)
+from code_assistant.storage.stores.base import FilteredCollection, StorageBase
+from code_assistant.storage.types import EmbeddingUnit, SearchResult
 
 logger = get_logger(__name__)
 
@@ -67,10 +63,7 @@ class MongoDBDocumentStore(StorageBase[Document]):
     """MongoDB implementation for storing Confluence documents."""
 
     def __init__(
-        self,
-        space_key: str,
-        connection_string: str,
-        database: str = "code_assistant"
+        self, space_key: str, connection_string: str, database: str = "code_assistant"
     ):
         """
         Initialize the MongoDB document store.
@@ -84,10 +77,7 @@ class MongoDBDocumentStore(StorageBase[Document]):
 
         self.client = MongoClient(connection_string)
         self.db = self.client[database]
-        self.collection = DocumentFilteredCollection(
-            self.db.documents,
-            self.namespace
-        )
+        self.collection = DocumentFilteredCollection(self.db.documents, self.namespace)
 
         self._setup_indexes()
 
@@ -102,12 +92,9 @@ class MongoDBDocumentStore(StorageBase[Document]):
         self.collection.create_index([("parent_id", 1), ("space_key", 1)])
         self.collection.create_index([("page_id", 1), ("space_key", 1)])
 
-# TODO: Might be able to take this to base class?
+    # TODO: Might be able to take this to base class?
     def _ensure_vector_index(
-        self,
-        model_name: str,
-        dimensions: int,
-        force_recreate: bool
+        self, model_name: str, dimensions: int, force_recreate: bool
     ) -> None:
         """Create vector search index for a specific model if it doesn't exist."""
         # Check if index already exists
@@ -206,7 +193,7 @@ class MongoDBDocumentStore(StorageBase[Document]):
         self.collection.delete_many({})
         logger.info(f"Deleted space {self.namespace}")
 
-# TODO: Might be able to take to base class
+    # TODO: Might be able to take to base class
     def refresh_vector_indexes(self, force_recreate: bool = False) -> None:
         """Recreate vector search indexes for all embedding models."""
         # Find unique model names and dimensions
@@ -219,7 +206,7 @@ class MongoDBDocumentStore(StorageBase[Document]):
         for model_name, dimensions in model_names.items():
             self._ensure_vector_index(model_name, dimensions, force_recreate)
 
-# TODO: Might be able to take to base class
+    # TODO: Might be able to take to base class
     def vector_search(
         self,
         embedding: EmbeddingUnit,

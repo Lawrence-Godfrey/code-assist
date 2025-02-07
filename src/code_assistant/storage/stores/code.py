@@ -6,22 +6,16 @@ including the filtered collection wrapper and the main storage class.
 """
 
 import time
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional, Union
 
 from pymongo import MongoClient
 from pymongo.operations import SearchIndexModel
 
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.embedding import EmbeddingModel
-from code_assistant.storage.codebase import CodeUnit, File, Class, Method, \
-    Function
-from code_assistant.storage.stores.base import (
-    FilteredCollection,
-    StorageBase,
-    SearchResult,
-    EmbeddingUnit,
-)
-
+from code_assistant.storage.codebase import Class, CodeUnit, File, Function, Method
+from code_assistant.storage.stores.base import FilteredCollection, StorageBase
+from code_assistant.storage.types import EmbeddingUnit, SearchResult
 
 logger = get_logger(__name__)
 
@@ -64,10 +58,7 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
     """MongoDB implementation for storing code units."""
 
     def __init__(
-            self,
-            codebase: str,
-            connection_string: str,
-            database: str = "code_assistant"
+        self, codebase: str, connection_string: str, database: str = "code_assistant"
     ):
         """
         Initialize the MongoDB code store.
@@ -81,10 +72,7 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
 
         self.client = MongoClient(connection_string)
         self.db = self.client[database]
-        self.collection = CodebaseFilteredCollection(
-            self.db.code_units,
-            self.namespace
-        )
+        self.collection = CodebaseFilteredCollection(self.db.code_units, self.namespace)
 
         self._setup_indexes()
 
@@ -96,17 +84,13 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
         self.collection.create_index([("unit_type", 1), ("codebase", 1)])
 
     def _ensure_vector_index(
-            self,
-            model_name: str,
-            dimensions: int,
-            force_recreate: bool
+        self, model_name: str, dimensions: int, force_recreate: bool
     ) -> None:
         """Create vector search index for a specific model if it doesn't exist."""
         # Check if index already exists
         existing_indices = list(self.collection.list_search_indexes())
         index_exists = any(
-            index.get("name",
-                      "") == f"vector_index_{model_name.replace('/', '_')}"
+            index.get("name", "") == f"vector_index_{model_name.replace('/', '_')}"
             for index in existing_indices
         )
 
@@ -193,10 +177,13 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
             return CodeUnit.from_dict(doc)
         return None
 
-    def get_items_by_type(self, unit_type: str) -> List[CodeUnit]:
-        """Get all code units of specified type."""
+    def get_items_by_type(self, unit_type: Union[str, List[str]]) -> List[CodeUnit]:
+        """Get all code units of specified type(s)."""
+        if isinstance(unit_type, str):
+            unit_type = [unit_type]
+
         results = []
-        for doc in self.collection.find({"unit_type": unit_type}):
+        for doc in self.collection.find({"unit_type": {"$in": unit_type}}):
             if unit := CodeUnit.from_dict(doc):
                 results.append(unit)
         return results
@@ -234,6 +221,13 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
             if func := CodeUnit.from_dict(doc):
                 yield func
 
+    def iter_flat(self) -> Iterator[CodeUnit]:
+        """Iterate through all units."""
+        yield from self.iter_files()
+        yield from self.iter_classes()
+        yield from self.iter_methods()
+        yield from self.iter_functions()
+
     def refresh_vector_indexes(self, force_recreate: bool = False) -> None:
         """Recreate vector search indexes for all embedding models."""
         # Find unique model names and dimensions
@@ -247,11 +241,11 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
             self._ensure_vector_index(model_name, dimensions, force_recreate)
 
     def vector_search(
-            self,
-            embedding: EmbeddingUnit,
-            embedding_model: EmbeddingModel,
-            top_k: int = 5,
-            threshold: Optional[float] = None,
+        self,
+        embedding: EmbeddingUnit,
+        embedding_model: EmbeddingModel,
+        top_k: int = 5,
+        threshold: Optional[float] = None,
     ) -> List[SearchResult[CodeUnit]]:
         """
         Perform vector similarity search.
@@ -288,8 +282,7 @@ class MongoDBCodeStore(StorageBase[CodeUnit]):
             pipeline.append(
                 {
                     "$match": {
-                        "$expr": {
-                            "$gte": [{"$meta": "vectorSearchScore"}, threshold]}
+                        "$expr": {"$gte": [{"$meta": "vectorSearchScore"}, threshold]}
                     }
                 }
             )

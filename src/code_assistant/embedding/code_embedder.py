@@ -1,7 +1,7 @@
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.storage.codebase import Method
-from code_assistant.storage.stores import CodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -23,13 +23,13 @@ class CodeEmbedder:
 
     def embed_code_units(
         self,
-        code_store: CodeStore,
+        code_store: MongoDBCodeStore,
     ) -> int:
         """
         Generate embeddings for a codebase.
 
         Args:
-            code_store (CodeStore): Store containing code units to embed
+            code_store (MongoDBCodeStore): Store containing code units to embed
 
         Returns:
             Number of code units processed
@@ -52,7 +52,7 @@ class CodeEmbedder:
                     formatted_string
                 )
 
-                code_store.save_unit(unit)
+                code_store.save_item(unit)
 
                 processed_units += 1
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.storage.stores.base import EmbeddingUnit
+from code_assistant.storage.types import EmbeddingUnit
 
 logger = get_logger(__name__)
 

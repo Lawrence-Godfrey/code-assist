@@ -15,7 +15,7 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_dataset import (
     PromptCodePairDataset,
 )
 from code_assistant.storage.codebase import CodeUnit
-from code_assistant.storage.stores import CodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 load_dotenv()
 
@@ -53,7 +53,7 @@ class AbstractPromptGenerator(ABC):
 
     def __init__(
         self,
-        code_store: CodeStore,
+        code_store: MongoDBCodeStore,
         output_path: Path = Path(
             os.path.expanduser(
                 "~/code_assist/datasets/synthetic/prompt_code_pairs.json"
@@ -86,7 +86,7 @@ class AbstractPromptGenerator(ABC):
 
     def _filter_code_units(self) -> List[CodeUnit]:
         """Filter and limit code units based on configuration."""
-        filtered_units = self.code_store.get_units_by_type(self.unit_types)
+        filtered_units = self.code_store.get_items_by_type(self.unit_types)
 
         if self.num_rows is not None:
             if self.num_rows < len(filtered_units):
@@ -128,7 +128,7 @@ class OpenAIGenerator(AbstractPromptGenerator):
 
     def __init__(
         self,
-        code_store: CodeStore,
+        code_store: MongoDBCodeStore,
         openai_api_key: str,
         config: OpenAIConfig = None,
         output_path: Path = Path(
