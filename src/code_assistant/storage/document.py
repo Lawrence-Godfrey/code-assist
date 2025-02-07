@@ -56,8 +56,6 @@ class Document(ABC):
         doc_type = data.pop("doc_type")
         if doc_type == "page":
             return ConfluencePage.from_dict(data)
-        elif doc_type == "attachment":
-            return ConfluenceAttachment.from_dict(data)
         else:
             raise ValueError(f"Invalid document type: {doc_type}")
 
@@ -106,41 +104,3 @@ class ConfluencePage(Document):
         }
 
         return page
-
-
-@dataclass
-class ConfluenceAttachment(Document):
-    """Represents an attachment in Confluence."""
-
-    doc_type = "attachment"
-    page_id: str = ""
-    file_type: str = ""
-    size: int = 0
-
-    def to_dict(self) -> dict:
-        """Convert the Confluence attachment to a dictionary."""
-        result = super().to_dict()
-        result.update(
-            {"page_id": self.page_id, "file_type": self.file_type, "size": self.size}
-        )
-        return result
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "ConfluenceAttachment":
-        """Create a ConfluenceAttachment from a dictionary."""
-        # Convert ISO format string back to datetime
-        data["last_modified"] = datetime.fromisoformat(data["last_modified"])
-
-        # Extract embeddings data
-        embeddings_data = data.pop("embeddings", {})
-
-        # Create the attachment instance
-        attachment = cls(**data)
-
-        # Restore embeddings
-        attachment.embeddings = {
-            model_name: EmbeddingUnit.from_dict(embedding_data)
-            for model_name, embedding_data in embeddings_data.items()
-        }
-
-        return attachment

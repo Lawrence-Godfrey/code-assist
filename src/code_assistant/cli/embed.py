@@ -86,7 +86,7 @@ class EmbedCommands:
 
         for result in results:
             logger.info(
-                f"{result.code_unit.fully_qualified_name()} - "
+                f"{result.item.fully_qualified_name()} - "
                 f"Similarity: {result.similarity_score}"
             )
 
