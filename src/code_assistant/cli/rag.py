@@ -4,7 +4,7 @@ from typing import Optional
 from code_assistant.logging.logger import LoggingConfig, get_logger
 from code_assistant.models.factory import ModelFactory
 from code_assistant.rag.rag_engine import RAGEngine
-from code_assistant.storage.stores import MongoDBCodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 logger = get_logger(__name__)
 

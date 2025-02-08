@@ -3,12 +3,13 @@ from typing import List, Optional
 import numpy as np
 
 from code_assistant.models.embedding import EmbeddingModel
-from code_assistant.storage.codebase import CodeEmbedding, CodeUnit
-from code_assistant.storage.stores import CodeStore, SearchResult
+from code_assistant.storage.codebase import CodeUnit
+from code_assistant.storage.stores.code import MongoDBCodeStore
+from code_assistant.storage.types import EmbeddingUnit, SearchResult
 
 
 class EmbeddingSimilaritySearch:
-    def __init__(self, code_store: CodeStore, embedding_model: EmbeddingModel):
+    def __init__(self, code_store: MongoDBCodeStore, embedding_model: EmbeddingModel):
         """
         Initialize the similarity search engine with code units and their embeddings.
         Each code unit should be a dictionary containing an 'embedding' key with
@@ -94,7 +95,7 @@ class EmbeddingSimilaritySearch:
 
     def find_similar(
         self,
-        query_embedding: CodeEmbedding,
+        query_embedding: EmbeddingUnit,
         top_k: int = 5,
         threshold: Optional[float] = None,
     ) -> List[SearchResult]:
@@ -149,7 +150,7 @@ class EmbeddingSimilaritySearch:
         results = []
         for idx in top_indices:
             unit_id = self.unit_ids[valid_indices[idx]]
-            code_unit = self.code_store.get_unit_by_id(unit_id)
+            code_unit = self.code_store.get_item_by_id(unit_id)
             results.append(SearchResult(code_unit, float(similarities[idx])))
 
         return results
@@ -174,7 +175,7 @@ class EmbeddingSimilaritySearch:
             List of SearchResult objects containing matched code units and scores
         """
         # Create a mask for the specified type
-        type_mask = np.array(self.code_store.get_units_by_type(unit_type), dtype=bool)
+        type_mask = np.array(self.code_store.get_items_by_type(unit_type), dtype=bool)
 
         if not np.any(type_mask):
             return []
@@ -208,7 +209,7 @@ class EmbeddingSimilaritySearch:
 
         return [
             SearchResult(
-                self.code_store.get_unit_by_id(filtered_unit_ids[idx]),
+                self.code_store.get_item_by_id(filtered_unit_ids[idx]),
                 float(similarities[idx]),
             )
             for idx in top_indices

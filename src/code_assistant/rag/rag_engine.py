@@ -28,7 +28,8 @@ from typing import List, Optional
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.models.prompt import PromptModel
-from code_assistant.storage.stores import CodeStore, SearchResult
+from code_assistant.storage.stores.code import MongoDBCodeStore
+from code_assistant.storage.types import SearchResult
 
 logger = get_logger(__name__)
 
@@ -36,7 +37,7 @@ logger = get_logger(__name__)
 class RAGEngine:
     def __init__(
         self,
-        code_store: CodeStore,
+        code_store: MongoDBCodeStore,
         embedding_model: EmbeddingModel,
         prompt_model: PromptModel,
         top_k: Optional[int] = 5,
@@ -144,7 +145,7 @@ class RAGEngine:
         prompt += "Here is the relevant code context from the codebase:\n\n"
 
         for i, result in enumerate(similar_code_units, 1):
-            unit = result.code_unit
+            unit = result.item
             prompt += f"[Code Unit {i}] "
             prompt += f"Type: {unit.unit_type}  |  "
             prompt += f"Full Name: {unit.fully_qualified_name()}\n"
