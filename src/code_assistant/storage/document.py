@@ -84,7 +84,6 @@ class ConfluencePage(Document):
         )
         return result
 
-    # TODO: Deal with duplication here
     @classmethod
     def from_dict(cls, data: dict) -> "ConfluencePage":
         """Create a ConfluencePage from a dictionary."""

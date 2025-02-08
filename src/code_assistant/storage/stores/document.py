@@ -92,7 +92,6 @@ class MongoDBDocumentStore(StorageBase[Document]):
         self.collection.create_index([("parent_id", 1), ("space_key", 1)])
         self.collection.create_index([("page_id", 1), ("space_key", 1)])
 
-    # TODO: Might be able to take this to base class?
     def _ensure_vector_index(
         self, model_name: str, dimensions: int, force_recreate: bool
     ) -> None:
@@ -193,7 +192,6 @@ class MongoDBDocumentStore(StorageBase[Document]):
         self.collection.delete_many({})
         logger.info(f"Deleted space {self.namespace}")
 
-    # TODO: Might be able to take to base class
     def refresh_vector_indexes(self, force_recreate: bool = False) -> None:
         """Recreate vector search indexes for all embedding models."""
         # Find unique model names and dimensions
@@ -206,7 +204,6 @@ class MongoDBDocumentStore(StorageBase[Document]):
         for model_name, dimensions in model_names.items():
             self._ensure_vector_index(model_name, dimensions, force_recreate)
 
-    # TODO: Might be able to take to base class
     def vector_search(
         self,
         embedding: EmbeddingUnit,

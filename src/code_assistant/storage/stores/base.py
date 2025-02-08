@@ -22,7 +22,6 @@ from code_assistant.storage.types import EmbeddingUnit, SearchResult
 T = TypeVar("T")
 
 
-# TODO: Fix ordering of methods here
 class StorageBase(ABC, Generic[T]):
     """
     Abstract base class for all storage backends (e.g. code or document).
@@ -38,6 +37,38 @@ class StorageBase(ABC, Generic[T]):
                      confluence space key)
         """
         self.namespace = namespace
+
+    @abstractmethod
+    def vector_search(
+        self,
+        embedding: EmbeddingUnit,
+        embedding_model: EmbeddingModel,
+        top_k: int = 5,
+        threshold: Optional[float] = None,
+    ) -> List[SearchResult[T]]:
+        """
+        Find similar items using vector similarity search.
+
+        Args:
+            embedding: The query embedding
+            embedding_model: The model used to generate embeddings
+            top_k: Maximum number of results to return
+            threshold: Optional similarity threshold (0-1)
+
+        Returns:
+            List of search results with similarity scores
+        """
+        pass
+
+    @abstractmethod
+    def refresh_vector_indexes(self, force_recreate: bool = False) -> None:
+        """
+        Recreate vector search indexes for all embedding models.
+
+        Args:
+            force_recreate: If True, recreate existing indexes
+        """
+        pass
 
     @abstractmethod
     def namespace_exists(self) -> bool:
@@ -86,48 +117,6 @@ class StorageBase(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def refresh_vector_indexes(self, force_recreate: bool = False) -> None:
-        """
-        Recreate vector search indexes for all embedding models.
-
-        Args:
-            force_recreate: If True, recreate existing indexes
-        """
-        pass
-
-    @abstractmethod
-    def vector_search(
-        self,
-        embedding: EmbeddingUnit,
-        embedding_model: EmbeddingModel,
-        top_k: int = 5,
-        threshold: Optional[float] = None,
-    ) -> List[SearchResult[T]]:
-        """
-        Find similar items using vector similarity search.
-
-        Args:
-            embedding: The query embedding
-            embedding_model: The model used to generate embeddings
-            top_k: Maximum number of results to return
-            threshold: Optional similarity threshold (0-1)
-
-        Returns:
-            List of search results with similarity scores
-        """
-        pass
-
-    @abstractmethod
-    def __len__(self) -> int:
-        """Get the total number of items in storage."""
-        pass
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[T]:
-        """Iterate through all items in storage."""
-        pass
-
-    @abstractmethod
     def _setup_indexes(self) -> None:
         """Setup database collections/tables with proper indexes."""
         pass
@@ -144,6 +133,16 @@ class StorageBase(ABC, Generic[T]):
             dimensions: Number of dimensions in the embedding vector
             force_recreate: If True, recreate the index even if it exists
         """
+        pass
+
+    @abstractmethod
+    def __len__(self) -> int:
+        """Get the total number of items in storage."""
+        pass
+
+    @abstractmethod
+    def __iter__(self) -> Iterator[T]:
+        """Iterate through all items in storage."""
         pass
 
 
