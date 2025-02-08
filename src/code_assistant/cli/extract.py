@@ -2,7 +2,10 @@ import asyncio
 import os
 from typing import Optional
 
-from code_assistant.data_extraction.extractors.confluence_document_extractor import ConfluenceDocumentExtractor, SpaceExistsError
+from code_assistant.data_extraction.extractors.confluence_document_extractor import (
+    ConfluenceDocumentExtractor,
+    SpaceExistsError,
+)
 from code_assistant.data_extraction.extractors.github_code_extractor import (
     CodebaseExistsError,
     GitHubCodeExtractor,
@@ -54,12 +57,12 @@ class ExtractCommands:
             )
 
     def confluence(
-            self,
-            space_key: str,
-            base_url: str,
-            database_url: str = "mongodb://localhost:27017/",
-            limit: Optional[int] = None,
-            overwrite: bool = False,
+        self,
+        space_key: str,
+        base_url: str,
+        database_url: str = "mongodb://localhost:27017/",
+        limit: Optional[int] = None,
+        overwrite: bool = False,
     ) -> None:
         """
         Extract documents from a Confluence space.
@@ -78,8 +81,7 @@ class ExtractCommands:
             # Setup document store
             database_url = os.getenv("MONGODB_URL") or database_url
             doc_store = MongoDBDocumentStore(
-                space_key=space_key,
-                connection_string=database_url
+                space_key=space_key, connection_string=database_url
             )
 
             # Run extraction (needs to be run in asyncio event loop)
