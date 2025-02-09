@@ -1,104 +1,112 @@
 import os
-from typing import Optional
+from enum import Enum
+from typing import Optional, Union
 
 from code_assistant.embedding.code_embedder import CodeEmbedder
+from code_assistant.embedding.document_embedder import DocumentEmbedder
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import ModelFactory
 from code_assistant.storage.stores.code import MongoDBCodeStore
+from code_assistant.storage.stores.document import MongoDBDocumentStore
 
 logger = get_logger(__name__)
+
+
+class StoreType(Enum):
+    """Type of store to embed."""
+
+    CODE = "code"
+    DOCUMENT = "document"
 
 
 class EmbedCommands:
     """Commands for generating and comparing embeddings."""
 
+    def generate(
+        self,
+        namespace: str,
+        store_type: str = "code",
+        database_url: str = "mongodb://localhost:27017/",
+        model_name: str = ModelFactory.get_default_embedding_model(),
+    ) -> None:
+        """
+        Generate embeddings for code units.
+
+        Args:
+            namespace: Name of the namespace (codebase or space_key)
+            store_type: Type of store to embed ('code' or 'document')
+            database_url: MongoDB connection URL
+            model_name: Name of the embedding model to use
+        """
+        try:
+            store_type = StoreType(store_type.lower())
+        except ValueError:
+            raise ValueError(
+                f"Invalid store type: {store_type}. Must be 'code' or 'document'"
+            )
+
+        database_url = os.getenv("MONGODB_URL") or database_url
+
+        self._process_embeddings(
+            namespace=namespace,
+            database_url=database_url,
+            model_name=model_name,
+            store_type=store_type,
+        )
+
     def _process_embeddings(
         self,
-        codebase: str,
+        namespace: str,
         database_url: str,
         model_name: str,
+        store_type: StoreType,
     ) -> None:
         """
         Generate embeddings for code units from a codebase.
 
         Args:
-            codebase: Name of the codebase to embed.
-            database_url: URL for MongoDB database to store code units
-            model_name: Name of the Hugging Face model to use for embeddings
+            namespace: Name of the namespace (codebase or space_key).
+            database_url: URL for MongoDB database
+            model_name: Name of the model to use for embeddings
+            store_type: Type of store to process (code or document)
         """
 
-        code_store = self._setup_code_store(codebase, database_url)
-
+        store = self._setup_store(namespace, database_url, store_type)
         embedding_model = ModelFactory.create(model_name)
 
         # Generate embeddings
         logger.info("Generating embeddings...")
-        code_embedder = CodeEmbedder(embedding_model=embedding_model)
-        units_processed = code_embedder.embed_code_units(code_store)
 
-        code_store.refresh_vector_indexes()
+        if store_type == StoreType.CODE:
+            embedder = CodeEmbedder(embedding_model=embedding_model)
+            items_processed = embedder.embed_code_units(store)
+        else:
+            embedder = DocumentEmbedder(embedding_model=embedding_model)
+            items_processed = embedder.embed_documents(store)
+
+        store.refresh_vector_indexes()
 
         # Print statistics
-        logger.info(f"Total code units processed: {units_processed}")
+        logger.info(f"Total items processed: {items_processed}")
         logger.info(f"Embedding dimension: {embedding_model.embedding_dimension}")
 
-    def generate(
+    def _setup_store(
         self,
-        codebase: str,
-        database_url: str = "mongodb://localhost:27017/",
-        model_name: str = ModelFactory.get_default_embedding_model(),
-    ) -> None:
-        """Generate embeddings for code units."""
+        namespace: str,
+        database_url: str,
+        store_type: StoreType,
+    ) -> Union[MongoDBCodeStore, MongoDBDocumentStore]:
+        """Set up the appropriate store based on type."""
+        logger.info(f"Loading items from {database_url}...")
 
-        database_url = os.getenv("MONGODB_URL") or database_url
-
-        self._process_embeddings(
-            codebase=codebase,
-            database_url=database_url,
-            model_name=model_name,
-        )
-
-    def compare(
-        self,
-        codebase: str,
-        query: str,
-        database_url: str = "mongodb://localhost:27017/",
-        model_name: str = ModelFactory.get_default_embedding_model(),
-        top_k: int = 5,
-        threshold: Optional[float] = None,
-    ) -> None:
-        """Compare a query against embedded code units."""
-
-        database_url = os.getenv("MONGODB_URL") or database_url
-
-        code_store = self._setup_code_store(codebase, database_url)
-
-        embedding_model = ModelFactory.create(model_name)
-
-        query_embedding = embedding_model.generate_embedding(query)
-
-        results = code_store.vector_search(
-            query_embedding,
-            embedding_model=embedding_model,
-            top_k=top_k,
-            threshold=threshold,
-        )
-
-        for result in results:
-            logger.info(
-                f"{result.item.fully_qualified_name()} - "
-                f"Similarity: {result.similarity_score}"
+        if store_type == StoreType.CODE:
+            store = MongoDBCodeStore(codebase=namespace, connection_string=database_url)
+        else:
+            store = MongoDBDocumentStore(
+                space_key=namespace, connection_string=database_url
             )
 
-    def _setup_code_store(
-        self,
-        codebase: str,
-        database_url: str,
-    ) -> MongoDBCodeStore:
-        logger.info(f"Loading code units from {database_url}...")
-        code_store = MongoDBCodeStore(codebase=codebase, connection_string=database_url)
+        if not store.namespace_exists():
+            raise ValueError(f"Namespace {namespace} does not exist.")
 
-        if not code_store.namespace_exists():
-            raise ValueError(f"Codebase {codebase} does not exist.")
-
-        return code_store
+        return store
