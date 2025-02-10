@@ -41,6 +41,7 @@ logger = get_logger(__name__)
 @dataclass
 class RetrievedContext:
     """Container for retrieved code and document results."""
+
     code_units: List[SearchResult[CodeUnit]]
     documents: List[SearchResult[Document]]
 
@@ -202,8 +203,11 @@ class RAGEngine:
                 prompt += f"[Document {i}] Title: {doc.title}\n"
                 prompt += "Content:\n"
                 # Truncate very long documents to maintain reasonable prompt length
-                content = doc.content[:1000] + "..." if len(
-                    doc.content) > 1000 else doc.content
+                content = (
+                    doc.content[:1000] + "..."
+                    if len(doc.content) > 1000
+                    else doc.content
+                )
                 prompt += f"{content}\n"
                 prompt += f"Similarity Score: {result.similarity_score:.2f}\n\n"
 
