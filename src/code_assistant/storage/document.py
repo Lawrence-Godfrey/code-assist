@@ -71,7 +71,7 @@ class Document(ABC):
 class ConfluencePage(Document):
     """Represents a Confluence page with its specific metadata."""
 
-    doc_type = "page"
+    doc_type = "confluence_page"
     parent_id: Optional[str] = None
     version: int = 1
     url: str = ""
@@ -87,6 +87,50 @@ class ConfluencePage(Document):
     @classmethod
     def from_dict(cls, data: dict) -> "ConfluencePage":
         """Create a ConfluencePage from a dictionary."""
+        # Convert ISO format string back to datetime
+        data["last_modified"] = datetime.fromisoformat(data["last_modified"])
+
+        # Extract embeddings data
+        embeddings_data = data.pop("embeddings", {})
+
+        # Create the page instance
+        page = cls(**data)
+
+        # Restore embeddings
+        page.embeddings = {
+            model_name: EmbeddingUnit.from_dict(embedding_data)
+            for model_name, embedding_data in embeddings_data.items()
+        }
+
+        return page
+
+
+@dataclass
+class NotionPage(Document):
+    """Represents a Notion page with its specific metadata."""
+
+    doc_type = "notion_page"
+    parent_id: Optional[str] = None
+    page_id: str = ""
+    url: str = ""
+    database_id: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Convert the Notion page to a dictionary."""
+        result = super().to_dict()
+        result.update(
+            {
+                "parent_id": self.parent_id,
+                "page_id": self.page_id,
+                "url": self.url,
+                "database_id": self.database_id,
+            }
+        )
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "NotionPage":
+        """Create a NotionPage from a dictionary."""
         # Convert ISO format string back to datetime
         data["last_modified"] = datetime.fromisoformat(data["last_modified"])
 
