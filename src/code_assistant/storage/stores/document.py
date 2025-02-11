@@ -24,12 +24,12 @@ class DocumentFilteredCollection(FilteredCollection):
     """Collection wrapper that filters by space key."""
 
     def _add_namespace_filter(self, filter_dict: Optional[Dict] = None) -> Dict:
-        """Add space_key filter to the query."""
+        """Add source_id filter to the query."""
         if not filter_dict:
             filter_dict = {}
 
         if self._namespace is not None:
-            filter_dict["space_key"] = self._namespace
+            filter_dict["source_id"] = self._namespace
 
         return filter_dict
 
@@ -37,7 +37,7 @@ class DocumentFilteredCollection(FilteredCollection):
         """Get the fields to include in projections for documents."""
         return {
             "id": 1,
-            "space_key": 1,
+            "source_id": 1,
             "doc_type": 1,
             "title": 1,
             "content": 1,
@@ -53,9 +53,9 @@ class DocumentFilteredCollection(FilteredCollection):
         }
 
     def _prepare_document(self, document: Dict) -> Dict:
-        """Add space_key to document if namespace is set."""
+        """Add source_id to document if namespace is set."""
         if self._namespace is not None:
-            document["space_key"] = self._namespace
+            document["source_id"] = self._namespace
         return document
 
 
@@ -63,17 +63,20 @@ class MongoDBDocumentStore(StorageBase[Document]):
     """MongoDB implementation for storing Confluence documents."""
 
     def __init__(
-        self, space_key: str, connection_string: str, database: str = "code_assistant"
+        self, source_id: str, connection_string: str, database: str = "code_assistant"
     ):
         """
         Initialize the MongoDB document store.
 
         Args:
-            space_key: Confluence space key
+            source_id: Identifier for the document collection
+                - Confluence: Space key
+                - Notion: Database ID
+                - PDFs: User defined collection name
             connection_string: MongoDB connection string
             database: Name of the database
         """
-        super().__init__(namespace=space_key)
+        super().__init__(namespace=source_id)
 
         self.client = MongoClient(connection_string)
         self.db = self.client[database]
@@ -85,12 +88,12 @@ class MongoDBDocumentStore(StorageBase[Document]):
         """Setup MongoDB collection with proper indexes."""
         self.collection.create_index("id", unique=True)
         self.collection.create_index("doc_type")
-        self.collection.create_index("space_key")
-        self.collection.create_index([("doc_type", 1), ("space_key", 1)])
+        self.collection.create_index("source_id")
+        self.collection.create_index([("doc_type", 1), ("source_id", 1)])
         self.collection.create_index("last_modified")
         # Index for parent-child relationships
-        self.collection.create_index([("parent_id", 1), ("space_key", 1)])
-        self.collection.create_index([("page_id", 1), ("space_key", 1)])
+        self.collection.create_index([("parent_id", 1), ("source_id", 1)])
+        self.collection.create_index([("page_id", 1), ("source_id", 1)])
 
     def _ensure_vector_index(
         self, model_name: str, dimensions: int, force_recreate: bool
@@ -123,7 +126,7 @@ class MongoDBDocumentStore(StorageBase[Document]):
                         # Add namespace field for filtering
                         {
                             "type": "filter",
-                            "path": "space_key",
+                            "path": "source_id",
                         },
                     ]
                 },

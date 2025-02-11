@@ -7,10 +7,8 @@ maintaining separation of concerns.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, Generic, Iterator, List, Mapping, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, Iterator, List, Mapping, Optional, TypeVar
 
-import numpy as np
 from pymongo.collection import Collection
 from pymongo.results import DeleteResult
 from pymongo.synchronous.command_cursor import CommandCursor
