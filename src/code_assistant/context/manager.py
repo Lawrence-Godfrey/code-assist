@@ -260,7 +260,7 @@ class ContextManager:
             raise ValueError(f"Context extraction failed: {str(e)}")
 
     async def refresh_context(
-        self, context_id: Optional[str] = None, all: bool = False
+        self, context_id: Optional[str] = None, all: bool = False, **extraction_kwargs
     ) -> None:
         """
         Refresh one or all contexts.
@@ -290,7 +290,6 @@ class ContextManager:
                 store.delete_namespace()
 
                 # Re-extract data
-                extraction_kwargs = context.additional_metadata.copy()
                 extraction_kwargs.update({"overwrite": True})
 
                 extractor = self._get_extractor(context.source, **extraction_kwargs)

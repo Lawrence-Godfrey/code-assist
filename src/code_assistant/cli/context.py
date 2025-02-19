@@ -181,11 +181,12 @@ class ContextCommands:
             logger.error(f"Failed to list contexts: {str(e)}")
             raise
 
-    def refresh(
+    async def refresh(
         self,
         context_id: Optional[str] = None,
         all: bool = False,
         database_url: str = "mongodb://localhost:27017/",
+            **kwargs
     ) -> None:
         """
         Refresh one or all contexts.
@@ -204,13 +205,35 @@ class ContextCommands:
 
             if all:
                 console.print("Refreshing all contexts...")
+                if not kwargs.get("github_token") or os.getenv("GITHUB_TOKEN"):
+                    raise ValueError("github_token is required for Github sources")
+                if not kwargs.get("database_id"):
+                    raise ValueError("database_id is required for Notion sources")
+                if not kwargs.get("space_key"):
+                    raise ValueError("space_key is required for Confluence sources")
+                if not kwargs.get("base_url"):
+                    raise ValueError("base_url is required for Confluence sources")
             else:
                 if context := manager.registry.get_context(context_id):
                     console.print(f"Refreshing context: {context.title}")
                 else:
                     raise ValueError(f"Context {context_id} not found")
 
-            manager.refresh_context(context_id=context_id, all=all)
+                if context.source == ContextSource.GITHUB:
+                    if not kwargs.get("github_token") or os.getenv(
+                            "GITHUB_TOKEN"):
+                        raise ValueError(
+                            "github_token is required for Github sources")
+                elif context.source == ContextSource.NOTION:
+                    if not kwargs.get("database_id"):
+                        raise ValueError("database_id is required for Notion sources")
+                elif context.source == ContextSource.CONFLUENCE:
+                    if not kwargs.get("space_key"):
+                        raise ValueError("space_key is required for Confluence sources")
+                    if not kwargs.get("base_url"):
+                        raise ValueError("base_url is required for Confluence sources")
+
+            await manager.refresh_context(context_id=context_id, all=all, **kwargs)
             console.print("Refresh completed successfully")
 
         except Exception as e:
