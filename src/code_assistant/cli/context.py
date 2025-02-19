@@ -15,7 +15,9 @@ from code_assistant.context.manager import (
     ContextManager,
 )
 from code_assistant.context.models import ContextMetadata, ContextSource, ContextType
+from code_assistant.embedding.code_embedder import CodeEmbedder
 from code_assistant.logging.logger import get_logger
+from code_assistant.models.factory import ModelFactory
 
 logger = get_logger(__name__)
 console = Console()
@@ -183,7 +185,7 @@ class ContextCommands:
         context_id: Optional[str] = None,
         all: bool = False,
         database_url: str = "mongodb://localhost:27017/",
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Refresh one or all contexts.
@@ -217,10 +219,8 @@ class ContextCommands:
                     raise ValueError(f"Context {context_id} not found")
 
                 if context.source == ContextSource.GITHUB:
-                    if not kwargs.get("github_token") or os.getenv(
-                            "GITHUB_TOKEN"):
-                        raise ValueError(
-                            "github_token is required for Github sources")
+                    if not kwargs.get("github_token") or os.getenv("GITHUB_TOKEN"):
+                        raise ValueError("github_token is required for Github sources")
                 elif context.source == ContextSource.NOTION:
                     if not kwargs.get("database_id"):
                         raise ValueError("database_id is required for Notion sources")
@@ -263,4 +263,75 @@ class ContextCommands:
 
         except Exception as e:
             logger.error(f"Failed to edit context: {str(e)}")
+            raise
+
+    def embed(
+        self,
+        context_id: Optional[str] = None,
+        all: bool = False,
+        database_url: str = "mongodb://localhost:27017/",
+        model_name: str = ModelFactory.get_default_embedding_model(),
+    ) -> None:
+        """
+        Generate embeddings for a context or all contexts.
+
+        Args:
+            context_id: ID of context to embed (required if all=False)
+            all: Whether to embed all contexts
+            database_url: MongoDB connection URL
+            model_name: Name of the model to use for embeddings
+        """
+        try:
+            database_url = os.getenv("MONGODB_URL") or database_url
+            manager = ContextManager(database_url)
+
+            if not all and not context_id:
+                raise ValueError("Must specify either context_id or --all")
+
+            # Create the embedding model
+            embedding_model = ModelFactory.create(model_name)
+
+            if all:
+                contexts = manager.registry.list_contexts()
+                console.print(
+                    f"Generating embeddings for all contexts using {model_name}"
+                )
+            else:
+                if context := manager.registry.get_context(context_id):
+                    contexts = [context]
+                    console.print(f"Generating embeddings for context: {context.title}")
+                else:
+                    raise ValueError(f"Context {context_id} not found")
+
+            for context in contexts:
+                try:
+                    # Get appropriate store
+                    store = manager.get_store(context.type, context.title)
+
+                    # Create embedder
+                    embedder = CodeEmbedder(embedding_model=embedding_model)
+
+                    # Generate embeddings
+                    logger.info(f"Generating embeddings for {context.title}...")
+                    units_processed = embedder.embed_code_units(store)
+
+                    # Refresh vector indexes
+                    store.refresh_vector_indexes()
+
+                    console.print(
+                        f"Processed {units_processed} units in {context.title} "
+                        f"with embedding dimension {embedding_model.embedding_dimension}"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to generate embeddings for context {context.id}: {str(e)}"
+                    )
+                    if not all:  # Raise error if processing single context
+                        raise
+
+            console.print("Embedding generation completed successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings: {str(e)}")
             raise

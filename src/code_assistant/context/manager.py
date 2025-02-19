@@ -160,7 +160,7 @@ class ContextManager:
         extractors = {
             ContextSource.GITHUB: lambda: GitHubCodeExtractor(
                 repo_download_dir=kwargs.get("repo_download_dir", ""),
-                github_token= kwargs.get("github_token", ""),
+                github_token=kwargs.get("github_token", ""),
             ),
             ContextSource.NOTION: lambda: NotionDocumentExtractor(),
             ContextSource.CONFLUENCE: lambda: ConfluenceDocumentExtractor(
@@ -174,7 +174,7 @@ class ContextManager:
 
         return extractors[source]()
 
-    def _get_store(self, type: ContextType, namespace: str):
+    def get_store(self, type: ContextType, namespace: str):
         """Get appropriate store for context type."""
         stores = {
             ContextType.CODE: lambda: MongoDBCodeStore(
@@ -231,7 +231,7 @@ class ContextManager:
         try:
             # Initialize extractor and store
             extractor = self._get_extractor(source, **extraction_kwargs)
-            store = self._get_store(type, metadata.title)
+            store = self.get_store(type, metadata.title)
 
             # Extract data
             if source == ContextSource.GITHUB:
@@ -275,21 +275,18 @@ class ContextManager:
 
         try:
             # Get appropriate store to remove data
-            store = self._get_store(context.type, context.title)
+            store = self.get_store(context.type, context.title)
 
             # Remove stored data
             store.delete_namespace()
-            logger.info(
-                f"Removed context data for: {context.title} ({context_id})")
+            logger.info(f"Removed context data for: {context.title} ({context_id})")
 
             # Remove metadata
             self.registry.remove_context(context_id)
-            logger.info(
-                f"Removed context metadata for: {context.title} ({context_id})")
+            logger.info(f"Removed context metadata for: {context.title} ({context_id})")
 
         except Exception as e:
-            logger.error(
-                f"Failed to fully remove context {context_id}: {str(e)}")
+            logger.error(f"Failed to fully remove context {context_id}: {str(e)}")
             raise ValueError(f"Context removal failed: {str(e)}")
 
     async def refresh_context(
@@ -319,7 +316,7 @@ class ContextManager:
         for context in contexts:
             try:
                 # Remove existing data
-                store = self._get_store(context.type, context.title)
+                store = self.get_store(context.type, context.title)
                 store.delete_namespace()
 
                 # Re-extract data
