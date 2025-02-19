@@ -11,12 +11,10 @@ from typing import Optional
 from rich.console import Console
 from rich.table import Table
 
-from code_assistant.context.core import (
+from code_assistant.context.manager import (
     ContextManager,
-    ContextMetadata,
-    ContextSource,
-    ContextType,
 )
+from code_assistant.context.models import ContextMetadata, ContextSource, ContextType
 from code_assistant.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -26,7 +24,7 @@ console = Console()
 class ContextCommands:
     """Commands for managing contexts."""
 
-    def add(
+    async def add(
         self,
         type: str,
         source: str,
@@ -96,13 +94,13 @@ class ContextCommands:
                     raise ValueError("base_url is required for Confluence sources")
 
             # Add context
-            context_id = manager.add_context(
+            context_id = await manager.add_context(
                 type=ctx_type,
                 source=ctx_source,
                 title=title,
                 description=description,
                 source_url=source_url,
-                additional_metadata=kwargs,
+                **kwargs,
             )
 
             console.print(f"Added context: {title} ({context_id})")

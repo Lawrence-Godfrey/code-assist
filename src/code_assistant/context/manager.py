@@ -158,7 +158,10 @@ class ContextManager:
     def _get_extractor(self, source: ContextSource, **kwargs):
         """Get appropriate extractor for source type."""
         extractors = {
-            ContextSource.GITHUB: lambda: GitHubCodeExtractor(**kwargs),
+            ContextSource.GITHUB: lambda: GitHubCodeExtractor(
+                repo_download_dir=kwargs.get("repo_download_dir", ""),
+                github_token= kwargs.get("github_token", ""),
+            ),
             ContextSource.NOTION: lambda: NotionDocumentExtractor(),
             ContextSource.CONFLUENCE: lambda: ConfluenceDocumentExtractor(
                 base_url=kwargs.get("base_url", "")
@@ -228,7 +231,7 @@ class ContextManager:
         try:
             # Initialize extractor and store
             extractor = self._get_extractor(source, **extraction_kwargs)
-            store = self._get_store(type, metadata.id)
+            store = self._get_store(type, metadata.title)
 
             # Extract data
             if source == ContextSource.GITHUB:

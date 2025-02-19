@@ -217,7 +217,7 @@ class ConfluenceDocumentExtractor:
             limit: Optional limit on number of pages to process
 
         Raises:
-            SpaceExistsError: If space exists and overwrite is False
+            SourceExistsError: If space exists and overwrite is False
             ValueError: If space doesn't exist or can't be accessed
         """
         # Verify space exists and get metadata

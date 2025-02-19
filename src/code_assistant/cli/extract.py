@@ -4,8 +4,8 @@ from typing import Optional
 
 from code_assistant.data_extraction.extractors.confluence_document_extractor import (
     ConfluenceDocumentExtractor,
-    SpaceExistsError,
 )
+from code_assistant.data_extraction.extractors.exceptions import SourceExistsError
 from code_assistant.data_extraction.extractors.github_code_extractor import (
     CodebaseExistsError,
     GitHubCodeExtractor,
@@ -100,7 +100,7 @@ class ExtractCommands:
                 )
             )
 
-        except SpaceExistsError:
+        except SourceExistsError:
             logger.error(
                 f"Space {space_key} already exists in storage. Use --overwrite to replace."
             )
@@ -152,7 +152,7 @@ class ExtractCommands:
                 )
             )
 
-        except SpaceExistsError:
+        except SourceExistsError:
             logger.error(
                 f"Space {database_id} already exists in storage. Use --overwrite to replace."
             )
@@ -200,7 +200,7 @@ class ExtractCommands:
                 )
             )
 
-        except SpaceExistsError:
+        except SourceExistsError:
             logger.error(
                 f"Space {space_key} already exists in storage. Use --overwrite to replace."
             )
