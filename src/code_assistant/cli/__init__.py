@@ -1,3 +1,4 @@
+from .context import ContextCommands
 from .embed import EmbedCommands
 from .evaluate import EvaluateCommands
 from .extract import ExtractCommands
@@ -6,6 +7,7 @@ from .pipeline import PipelineCommands
 from .rag import RagCommands
 
 __all__ = [
+    "ContextCommands",
     "ExtractCommands",
     "EmbedCommands",
     "EvaluateCommands",

@@ -1,7 +1,15 @@
 import dotenv
 import fire
 
-from code_assistant.cli import embed, evaluate, extract, generate, pipeline, rag
+from code_assistant.cli import (
+    context,
+    embed,
+    evaluate,
+    extract,
+    generate,
+    pipeline,
+    rag,
+)
 
 dotenv.load_dotenv()
 
@@ -10,6 +18,7 @@ class CLI:
     """Main CLI interface for the code assistant package."""
 
     def __init__(self):
+        self.context = context.ContextCommands()
         self.extract = extract.ExtractCommands()
         self.embed = embed.EmbedCommands()
         self.evaluate = evaluate.EvaluateCommands()

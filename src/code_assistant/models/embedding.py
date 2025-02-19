@@ -5,7 +5,7 @@ import numpy as np
 
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import Model, ModelFactory
-from code_assistant.storage.codebase import CodeEmbedding
+from code_assistant.storage.types import EmbeddingUnit
 
 logger = get_logger(__name__)
 
@@ -23,7 +23,7 @@ class EmbeddingModel(Model, ABC):
         super().__init__(model_name)
 
     @abstractmethod
-    def generate_embedding(self, text: str) -> CodeEmbedding:
+    def generate_embedding(self, text: str) -> EmbeddingUnit:
         """Generate an embedding vector for the given text."""
         pass
 
@@ -66,7 +66,7 @@ class TransformersEmbeddingModel(EmbeddingModel):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self.model.to(self.device)
 
-    def generate_embedding(self, text: str) -> CodeEmbedding:
+    def generate_embedding(self, text: str) -> EmbeddingUnit:
         """Generate an embedding vector for the given text."""
         try:
             # Tokenize the input
@@ -86,7 +86,7 @@ class TransformersEmbeddingModel(EmbeddingModel):
 
             # Normalize embedding to unit length
             embedding = embeddings.cpu().numpy().flatten()
-            return CodeEmbedding(
+            return EmbeddingUnit(
                 embedding / np.linalg.norm(embedding), self._model_name
             )
 
@@ -136,7 +136,7 @@ class OpenAIEmbeddingModel(EmbeddingModel):
         self.client = OpenAI(api_key=api_key)
         self._embedding_dimension = self.MODELS[model_name]
 
-    def generate_embedding(self, text: str) -> CodeEmbedding:
+    def generate_embedding(self, text: str) -> EmbeddingUnit:
         """Generate an embedding vector for the given text."""
         try:
             response = self.client.embeddings.create(
@@ -147,7 +147,7 @@ class OpenAIEmbeddingModel(EmbeddingModel):
             embedding = np.array(response.data[0].embedding)
 
             # OpenAI embeddings are already normalized, but for consistency...
-            return CodeEmbedding(
+            return EmbeddingUnit(
                 embedding / np.linalg.norm(embedding), self._model_name
             )
 
