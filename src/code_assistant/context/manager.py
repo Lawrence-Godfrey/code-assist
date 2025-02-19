@@ -259,6 +259,39 @@ class ContextManager:
             logger.error(f"Failed to add context: {str(e)}")
             raise ValueError(f"Context extraction failed: {str(e)}")
 
+    def remove_context(self, context_id: str) -> None:
+        """
+        Remove context and all associated data.
+
+        Args:
+            context_id: ID of context to remove
+
+        Raises:
+            ValueError: If context doesn't exist or removal fails
+        """
+        # Get context metadata first
+        if not (context := self.registry.get_context(context_id)):
+            raise ValueError(f"Context {context_id} does not exist")
+
+        try:
+            # Get appropriate store to remove data
+            store = self._get_store(context.type, context.title)
+
+            # Remove stored data
+            store.delete_namespace()
+            logger.info(
+                f"Removed context data for: {context.title} ({context_id})")
+
+            # Remove metadata
+            self.registry.remove_context(context_id)
+            logger.info(
+                f"Removed context metadata for: {context.title} ({context_id})")
+
+        except Exception as e:
+            logger.error(
+                f"Failed to fully remove context {context_id}: {str(e)}")
+            raise ValueError(f"Context removal failed: {str(e)}")
+
     async def refresh_context(
         self, context_id: Optional[str] = None, all: bool = False, **extraction_kwargs
     ) -> None:
@@ -286,7 +319,7 @@ class ContextManager:
         for context in contexts:
             try:
                 # Remove existing data
-                store = self._get_store(context.type, context.id)
+                store = self._get_store(context.type, context.title)
                 store.delete_namespace()
 
                 # Re-extract data

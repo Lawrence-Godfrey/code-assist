@@ -125,12 +125,9 @@ class ContextCommands:
             database_url = os.getenv("MONGODB_URL") or database_url
             manager = ContextManager(database_url)
 
-            # Get context for logging
-            if context := manager.registry.get_context(context_id):
-                manager.registry.remove_context(context_id)
-                console.print(f"Removed context: {context.title} ({context_id})")
-            else:
-                raise ValueError(f"Context {context_id} not found")
+            # Remove context and all associated data
+            manager.remove_context(context_id)
+            console.print(f"Successfully removed context and all associated data")
 
         except Exception as e:
             logger.error(f"Failed to remove context: {str(e)}")
@@ -186,7 +183,7 @@ class ContextCommands:
         context_id: Optional[str] = None,
         all: bool = False,
         database_url: str = "mongodb://localhost:27017/",
-            **kwargs
+        **kwargs
     ) -> None:
         """
         Refresh one or all contexts.
