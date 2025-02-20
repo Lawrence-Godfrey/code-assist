@@ -1,6 +1,7 @@
 anthropic==0.45.2
 astor==0.8.1
 atlassian-python-api==3.41.19
+docker==7.1.0
 einops==0.8.0
 fire==0.7.0
 GitPython==3.1.43
