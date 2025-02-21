@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 import tempfile
@@ -8,20 +7,15 @@ from docker.models.containers import Container
 
 from code_assistant.pipeline.coding.environment.base import \
     ExecutionEnvironment, ExecutionResult
-from code_assistant.pipeline.coding.environment.exceptions import EnvironmentError
+from code_assistant.pipeline.coding.environment.exceptions import (
+    EnvironmentError, EnvironmentSetupError, EnvironmentCleanupError,
+    CommandExecutionError, TestExecutionError, ChangeApplicationError
+)
 from code_assistant.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
-
-@dataclass
-class DockerConfig:
-    """Configuration for Docker environment."""
-    base_image: str = "python:3.8"
-    memory_limit: str = "2g"
-    cpu_limit: int = 2
-    timeout: int = 300
-    working_dir: str = "/workspace"
+from code_assistant.pipeline.coding.environment.config import DockerConfig
 
 
 class DockerEnvironment(ExecutionEnvironment):
@@ -83,7 +77,8 @@ class DockerEnvironment(ExecutionEnvironment):
 
         except Exception as e:
             await self.cleanup()  # Clean up on failure
-            raise EnvironmentError(f"Environment setup failed: {str(e)}") from e
+            raise EnvironmentSetupError(
+                f"Environment setup failed: {str(e)}") from e
 
     def _setup_container(self) -> None:
         """Perform initial container setup."""
@@ -117,7 +112,8 @@ class DockerEnvironment(ExecutionEnvironment):
             EnvironmentError: If command execution fails
         """
         if not self.container:
-            raise EnvironmentError("Container not initialized")
+            raise EnvironmentError(
+                "Container not initialized or has been cleaned up")
 
         try:
             exec_result = self.container.exec_run(
@@ -132,7 +128,12 @@ class DockerEnvironment(ExecutionEnvironment):
             )
 
         except Exception as e:
-            raise EnvironmentError(f"Command execution failed: {str(e)}") from e
+            raise CommandExecutionError(
+                command=command,
+                exit_code=-1,
+                output="",
+                error=str(e)
+            ) from e
 
     async def cleanup(self) -> None:
         """Clean up Docker environment."""
@@ -155,7 +156,7 @@ class DockerEnvironment(ExecutionEnvironment):
 
         except Exception as e:
             logger.error(f"Environment cleanup failed: {str(e)}")
-            raise EnvironmentError(
+            raise EnvironmentCleanupError(
                 f"Environment cleanup failed: {str(e)}") from e
         finally:
             self.container = None
@@ -185,14 +186,18 @@ class DockerEnvironment(ExecutionEnvironment):
             result = self.execute_command("python setup.py develop")
 
             if result.exit_code != 0:
-                raise EnvironmentError(
-                    f"Failed to apply changes: {result.error or result.output}"
+                raise ChangeApplicationError(
+                    error=result.error or result.output,
+                    changes=changes
                 )
 
             return result
 
         except Exception as e:
-            raise EnvironmentError(f"Failed to apply changes: {str(e)}") from e
+            raise ChangeApplicationError(
+                error=str(e),
+                changes=changes
+            ) from e
 
     async def run_tests(self, test_files: List[str]) -> ExecutionResult:
         """
@@ -220,4 +225,8 @@ class DockerEnvironment(ExecutionEnvironment):
             return self.execute_command(test_command)
 
         except Exception as e:
-            raise EnvironmentError(f"Test execution failed: {str(e)}") from e
+            raise TestExecutionError(
+                test_files=test_files,
+                output="",
+                error=str(e)
+            ) from e
