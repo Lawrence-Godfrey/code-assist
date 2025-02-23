@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 @dataclass
 class BaseEnvironmentConfig:
     """Base configuration for all execution environments."""
+
     timeout: int = 300  # Timeout in seconds
     env_vars: Dict[str, str] = field(default_factory=dict)
 
@@ -24,7 +25,8 @@ class BaseEnvironmentConfig:
 @dataclass
 class DockerConfig(BaseEnvironmentConfig):
     """Configuration for Docker environment."""
-    base_image: str = "python:3.8"
+
+    base_image: str = "python:3.12"
     memory_limit: str = "2g"
     cpu_limit: int = 2
     working_dir: str = "/workspace"
@@ -35,9 +37,9 @@ class DockerConfig(BaseEnvironmentConfig):
 
     # Additional packages to install
     apt_packages: List[str] = field(
-        default_factory=lambda: ["git", "curl", "build-essential"])
+        default_factory=lambda: ["git", "curl", "build-essential"]
+    )
 
     # Python-specific settings
     install_requirements: bool = True
-    pip_packages: List[str] = field(
-        default_factory=lambda: ["pytest", "pytest-cov"])
+    pip_packages: List[str] = field(default_factory=lambda: ["pytest", "pytest-cov"])
