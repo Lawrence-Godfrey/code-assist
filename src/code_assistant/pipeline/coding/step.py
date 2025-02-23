@@ -12,13 +12,10 @@ from code_assistant.feedback.manager import FeedbackManager
 from code_assistant.feedback.mixins import FeedbackEnabled
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.prompt import PromptModel
+from code_assistant.pipeline.coding.environment.base import ExecutionResult
+from code_assistant.pipeline.coding.environment.exceptions import EnvironmentError
+from code_assistant.pipeline.coding.environment.factory import EnvironmentFactory
 from code_assistant.pipeline.step import PipelineStep
-from code_assistant.pipeline.coding.environment.base import \
-   ExecutionResult
-from code_assistant.pipeline.coding.environment.factory import \
-    EnvironmentFactory
-from code_assistant.pipeline.coding.environment.exceptions import \
-    EnvironmentError
 
 logger = get_logger(__name__)
 
@@ -27,11 +24,11 @@ class CodingStep(PipelineStep, FeedbackEnabled):
     """Pipeline step for code execution."""
 
     def __init__(
-            self,
-            prompt_model: PromptModel,
-            feedback_manager: FeedbackManager,
-            env_type: str = "docker",
-            env_config: Optional[Dict] = None
+        self,
+        prompt_model: PromptModel,
+        feedback_manager: FeedbackManager,
+        env_type: str = "docker",
+        env_config: Optional[Dict] = None,
     ):
         """
         Initialize the execution step.
@@ -46,10 +43,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         FeedbackEnabled.__init__(self, feedback_manager)
 
         self._prompt_model = prompt_model
-        self._environment = EnvironmentFactory.create_environment(
-            env_type,
-            env_config
-        )
+        self._environment = EnvironmentFactory.create_environment(env_type, env_config)
 
     async def execute(self, context: Dict) -> None:
         """
@@ -61,8 +55,12 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         Raises:
             ValueError: If required context is missing
         """
-        repo_url = os.getenv("REPO_URL")  # TODO: Settings object is probably needed soon
-        branch = "agent/feature_test"  # TODO: Need to generate branch names automatically
+        repo_url = os.getenv(
+            "REPO_URL"
+        )  # TODO: Settings object is probably needed soon
+        branch = (
+            "agent/feature_test"  # TODO: Need to generate branch names automatically
+        )
 
         try:
             # Setup environment
@@ -79,7 +77,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
             context["execution_results"] = {
                 "success": result.success,
                 "output": result.output,
-                "error": result.error
+                "error": result.error,
             }
 
             # Request feedback
@@ -89,7 +87,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
                     prompt=(
                         f"Execution failed with error:\n{result.error or result.output}\n\n"
                         "Would you like to retry with different changes? (yes/no)"
-                    )
+                    ),
                 )
 
                 if response.lower().strip() in ("y", "yes"):
@@ -122,9 +120,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         logger.info("Generating code changes")
 
         # For testing, we'll create a simple file
-        return [
-            "test_file.py:print('Hello, Pipeline!')"
-        ]
+        return ["test_file.py:print('Hello, Pipeline!')"]
 
     async def _apply_and_test(self, changes: List[str]) -> ExecutionResult:
         """
@@ -142,7 +138,8 @@ class CodingStep(PipelineStep, FeedbackEnabled):
 
         if not apply_result.success:
             logger.error(
-                f"Failed to apply changes: {apply_result.error or apply_result.output}")
+                f"Failed to apply changes: {apply_result.error or apply_result.output}"
+            )
             return apply_result
 
         # Run tests

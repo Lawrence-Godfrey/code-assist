@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 @dataclass
 class ExecutionResult:
     """Result of code execution in environment."""
+
     exit_code: int
     output: str
     error: Optional[str] = None
@@ -62,10 +63,10 @@ class ExecutionEnvironment(ABC):
 
     @abstractmethod
     def execute_command(
-            self,
-            command: str,
-            workdir: Optional[str] = None,
-            env: Optional[Dict[str, str]] = None
+        self,
+        command: str,
+        workdir: Optional[str] = None,
+        env: Optional[Dict[str, str]] = None,
     ) -> ExecutionResult:
         """
         Execute a command in the environment.

@@ -115,7 +115,7 @@ class AgentPipeline(Pipeline):
         coding_step = CodingStep(
             prompt_model=self._prompt_model,
             feedback_manager=self._feedback_manager,
-            env_type="docker"
+            env_type="docker",
         )
 
         # Configure pipeline steps
