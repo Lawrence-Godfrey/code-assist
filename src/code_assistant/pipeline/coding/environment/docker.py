@@ -126,7 +126,7 @@ class DockerEnvironment(ExecutionEnvironment):
 
             return ExecutionResult(
                 exit_code=exec_result.exit_code,
-                output=exec_result.output.decode('utf-8')
+                output=exec_result.output.decode("utf-8"),
             )
 
         except Exception as e:

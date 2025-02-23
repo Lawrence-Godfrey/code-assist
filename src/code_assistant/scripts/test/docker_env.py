@@ -17,6 +17,12 @@ sys.path.append(str(script_dir.parent.parent))
 from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.coding.environment.config import DockerConfig
 from code_assistant.pipeline.coding.environment.docker import DockerEnvironment
+from code_assistant.pipeline.coding.models import (
+    FileModification,
+    ModificationType,
+    CodeChange,
+    ChangeType,
+)
 
 logger = get_logger(__name__)
 
@@ -68,15 +74,93 @@ async def test_docker_environment(repo_url: str):
         result = env.execute_command("pytest -xvs test_file.py")
         logger.info(f"Initial test result: \n{result.output}")
 
-        # Apply changes
-        logger.info("Testing apply_changes")
-        changes = ["test_file2.py:print('This is another test file')"]
-        result = await env.apply_changes(changes)
-        logger.info(f"Apply changes result: {result.exit_code}")
+        # Test all types of changes
+        logger.info("Testing all types of changes")
 
-        # Verify file was created
-        result = env.execute_command("cat test_file2.py")
-        logger.info(f"New file content: {result.output}")
+        # 1. CREATE new file
+        create_change = CodeChange(
+            type=ChangeType.CREATE,
+            file_path="new_test.py",
+            content="""
+        def test_new():
+            assert True
+        """,
+        )
+
+        # 2. MODIFY with INSERT
+        insert_modification = FileModification(
+            type=ModificationType.INSERT,
+            content="def test_inserted():\n    assert True\n",
+            start_line=1,
+        )
+
+        modify_insert_change = CodeChange(
+            type=ChangeType.MODIFY,
+            file_path="test_file.py",
+            modifications=[insert_modification],
+        )
+
+        # 3. MODIFY with REPLACE
+        replace_modification = FileModification(
+            type=ModificationType.REPLACE,
+            content="def test_replaced():\n    assert True\n",
+            start_line=2,
+            end_line=4,
+        )
+
+        modify_replace_change = CodeChange(
+            type=ChangeType.MODIFY,
+            file_path="test_file.py",
+            modifications=[replace_modification],
+        )
+
+        # 4. MODIFY with DELETE
+        delete_modification = FileModification(
+            type=ModificationType.DELETE, content="", start_line=6, end_line=8
+        )
+
+        modify_delete_change = CodeChange(
+            type=ChangeType.MODIFY,
+            file_path="test_file.py",
+            modifications=[delete_modification],
+        )
+
+        # 5. DELETE file
+        delete_change = CodeChange(type=ChangeType.DELETE, file_path="new_test.py")
+
+        # Apply and verify each change
+        async def test_change(change: CodeChange, description: str):
+            logger.info(f"Testing {description}")
+            result = await env.apply_changes([change])
+            logger.info(f"Apply {description} result: {result.exit_code}")
+
+            # Verify the change
+            if change.type == ChangeType.DELETE:
+                result = env.execute_command(
+                    f"test -e {change.file_path} && echo 'File exists' || echo 'File does not exist'"
+                )
+                logger.info(f"Verify deletion: {result.output}")
+            else:
+                result = env.execute_command(f"cat {change.file_path}")
+                logger.info(f"File content after {description}:\n{result.output}")
+
+            # Run tests after each change
+            result = env.execute_command("pytest -xvs")
+            logger.info(f"Test result after {description}:\n{result.output}")
+
+        # Execute all changes in sequence
+        changes_to_test = [
+            (create_change, "CREATE new file"),
+            (modify_insert_change, "MODIFY with INSERT"),
+            (modify_replace_change, "MODIFY with REPLACE"),
+            (modify_delete_change, "MODIFY with DELETE"),
+            (delete_change, "DELETE file"),
+        ]
+
+        for change, description in changes_to_test:
+            await test_change(change, description)
+
+        logger.info("All change types tested")
 
         # Run tests
         logger.info("Testing run_tests")

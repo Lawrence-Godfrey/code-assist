@@ -4,7 +4,9 @@ Custom exceptions for execution environments.
 This module defines the exception hierarchy used throughout the execution
 environment system to handle error cases and environment failures.
 """
+
 from code_assistant.pipeline.coding.models import CodeChange
+
 
 class EnvironmentError(Exception):
     """Base class for all environment-related errors."""
