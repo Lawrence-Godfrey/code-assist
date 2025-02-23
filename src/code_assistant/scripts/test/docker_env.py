@@ -53,15 +53,15 @@ async def test_docker_environment(repo_url: str):
 
         # Create test file
         logger.info("Creating initial test file")
-        test_content = """
-        def test_function():
-            message = "Hello, Pipeline!"
-            assert message == "Hello, Pipeline!"
-
-        def test_success():
-            message = "Hello, Pipeline!"
-            assert message == "Hello, Pipeline!"
-        """
+        test_content = (
+            "def test_function():\n"
+            "    message = \"Hello, Pipeline!\"\n"
+            "    assert message == \"Hello, Pipeline!\"\n"
+            "\n"
+            "def test_success():\n"
+            "    message = \"Hello, Pipeline!\"\n"
+            "    assert message == \"Hello, Pipeline!\"\n"
+        )
 
         result = env.execute_command(f"echo '{test_content}' > test_file.py")
         logger.info(f"Create file result: {result.exit_code}")
@@ -81,10 +81,7 @@ async def test_docker_environment(repo_url: str):
         create_change = CodeChange(
             type=ChangeType.CREATE,
             file_path="new_test.py",
-            content="""
-        def test_new():
-            assert True
-        """,
+            content="def test_new():\n    assert True\n",
         )
 
         # 2. MODIFY with INSERT
@@ -104,8 +101,8 @@ async def test_docker_environment(repo_url: str):
         replace_modification = FileModification(
             type=ModificationType.REPLACE,
             content="def test_replaced():\n    assert True\n",
-            start_line=2,
-            end_line=4,
+            start_line=1,
+            end_line=3,
         )
 
         modify_replace_change = CodeChange(
