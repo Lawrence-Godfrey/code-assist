@@ -5,19 +5,18 @@ This script tests the Docker environment setup, command execution,
 and cleanup functionality.
 """
 
+import argparse
 import asyncio
 import sys
-import argparse
 from pathlib import Path
 
 # Add project root to path if needed
 script_dir = Path(__file__).resolve().parent
 sys.path.append(str(script_dir.parent.parent))
 
-from code_assistant.pipeline.coding.environment.config import DockerConfig
-from code_assistant.pipeline.coding.environment.docker import \
-    DockerEnvironment
 from code_assistant.logging.logger import get_logger
+from code_assistant.pipeline.coding.environment.config import DockerConfig
+from code_assistant.pipeline.coding.environment.docker import DockerEnvironment
 
 logger = get_logger(__name__)
 
@@ -27,7 +26,7 @@ async def test_docker_environment(repo_url: str):
     # Create Docker environment
     logger.info("Creating Docker environment")
     config = DockerConfig(
-        base_image="python:3.8",
+        base_image="python:3.12",
         memory_limit="1g",
         cpu_limit=1,
     )
@@ -47,36 +46,31 @@ async def test_docker_environment(repo_url: str):
         logger.info(f"Directory listing: \n{result.output}")
 
         # Create test file
-        logger.info("Creating test file")
+        logger.info("Creating initial test file")
         test_content = """
-def test_function():
-    return "Hello, Pipeline!"
+        def test_function():
+            message = "Hello, Pipeline!"
+            assert message == "Hello, Pipeline!"
 
-def test_success():
-    assert test_function() == "Hello, Pipeline!"
-"""
+        def test_success():
+            message = "Hello, Pipeline!"
+            assert message == "Hello, Pipeline!"
+        """
 
         result = env.execute_command(f"echo '{test_content}' > test_file.py")
         logger.info(f"Create file result: {result.exit_code}")
-
-        # Run the file
-        logger.info("Running test file")
-        result = env.execute_command("python test_file.py")
-        logger.info(f"Execution result: {result.output}")
 
         # Run pytest
         logger.info("Installing pytest")
         env.execute_command("pip install pytest")
 
-        logger.info("Running pytest")
+        logger.info("Running pytest on initial test file")
         result = env.execute_command("pytest -xvs test_file.py")
-        logger.info(f"Test result: \n{result.output}")
+        logger.info(f"Initial test result: \n{result.output}")
 
         # Apply changes
         logger.info("Testing apply_changes")
-        changes = [
-            "test_file2.py:print('This is another test file')"
-        ]
+        changes = ["test_file2.py:print('This is another test file')"]
         result = await env.apply_changes(changes)
         logger.info(f"Apply changes result: {result.exit_code}")
 
@@ -103,12 +97,11 @@ def test_success():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Test Docker execution environment")
+    parser = argparse.ArgumentParser(description="Test Docker execution environment")
     parser.add_argument(
         "--repo",
         default="https://github.com/Lawrence-Godfrey/code-assist.git",
-        help="Git repository URL to clone"
+        help="Git repository URL to clone",
     )
 
     args = parser.parse_args()
