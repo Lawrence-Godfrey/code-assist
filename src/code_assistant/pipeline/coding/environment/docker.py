@@ -42,7 +42,7 @@ class DockerEnvironment(ExecutionEnvironment):
         self.work_dir: Optional[Path] = None
         self.repo: Optional[git.Repo] = None
 
-    async def setup(self, repo_url: str, branch: str = "main") -> None:
+    def setup(self, repo_url: str, branch: str = "main") -> None:
         """
         Set up Docker environment with repository.
 
@@ -82,7 +82,7 @@ class DockerEnvironment(ExecutionEnvironment):
             self._setup_container()
 
         except Exception as e:
-            await self.cleanup()  # Clean up on failure
+            self.cleanup()  # Clean up on failure
             raise EnvironmentSetupError(f"Environment setup failed: {str(e)}") from e
 
     def _setup_container(self) -> None:
@@ -134,7 +134,7 @@ class DockerEnvironment(ExecutionEnvironment):
                 command=command, exit_code=-1, output="", error=str(e)
             ) from e
 
-    async def cleanup(self) -> None:
+    def cleanup(self) -> None:
         """Clean up Docker environment."""
         try:
             # Stop and remove container
@@ -286,7 +286,7 @@ class DockerEnvironment(ExecutionEnvironment):
         except Exception as e:
             return ChangeResult(False, str(change.file_path), str(e))
 
-    async def apply_changes(self, changes: List[CodeChange]) -> ExecutionResult:
+    def apply_changes(self, changes: List[CodeChange]) -> ExecutionResult:
         """
         Apply code changes in the environment.
 
@@ -334,7 +334,7 @@ class DockerEnvironment(ExecutionEnvironment):
         except Exception as e:
             raise ChangeApplicationError(error=str(e), changes=changes) from e
 
-    async def run_tests(self, test_files: List[str]) -> ExecutionResult:
+    def run_tests(self, test_files: List[str]) -> ExecutionResult:
         """
         Run tests in the environment.
 

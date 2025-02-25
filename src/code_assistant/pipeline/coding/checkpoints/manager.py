@@ -35,7 +35,7 @@ class CheckpointManager:
         self._checkpoints: Dict[str, Checkpoint] = {}
         self._current_branch: Optional[str] = None
 
-    async def create_checkpoint(
+    def create_checkpoint(
         self, environment: ExecutionEnvironment, message: str, changes: List[CodeChange]
     ) -> Checkpoint:
         """
@@ -111,7 +111,7 @@ class CheckpointManager:
 
         return checkpoint
 
-    async def validate_checkpoint(
+    def validate_checkpoint(
         self,
         checkpoint_id: str,
         environment: ExecutionEnvironment,
@@ -139,7 +139,7 @@ class CheckpointManager:
         logger.info(f"Validating checkpoint {checkpoint_id}")
 
         # Run tests
-        test_result = await environment.run_tests(test_files or [])
+        test_result = environment.run_tests(test_files or [])
 
         # Extract test statistics from output
         passed_count, failed_count, error_count = self._parse_test_statistics(
@@ -171,7 +171,7 @@ class CheckpointManager:
 
         return checkpoint
 
-    async def rollback_to_checkpoint(
+    def rollback_to_checkpoint(
         self,
         checkpoint_id: str,
         environment: ExecutionEnvironment,

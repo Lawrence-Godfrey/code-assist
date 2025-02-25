@@ -6,7 +6,6 @@ and cleanup functionality.
 """
 
 import argparse
-import asyncio
 import sys
 from pathlib import Path
 
@@ -27,7 +26,7 @@ from code_assistant.pipeline.coding.models import (
 logger = get_logger(__name__)
 
 
-async def test_docker_environment(repo_url: str):
+def test_docker_environment(repo_url: str):
     """Test Docker environment with basic operations."""
     # Create Docker environment
     logger.info("Creating Docker environment")
@@ -41,7 +40,7 @@ async def test_docker_environment(repo_url: str):
     try:
         # Setup environment
         logger.info(f"Setting up environment with repo: {repo_url}")
-        await env.setup(repo_url)
+        env.setup(repo_url)
 
         # Execute basic commands
         logger.info("Testing command execution")
@@ -126,9 +125,9 @@ async def test_docker_environment(repo_url: str):
         delete_change = CodeChange(type=ChangeType.DELETE, file_path="new_test.py")
 
         # Apply and verify each change
-        async def test_change(change: CodeChange, description: str):
+        def test_change(change: CodeChange, description: str):
             logger.info(f"Testing {description}")
-            result = await env.apply_changes([change])
+            result = env.apply_changes([change])
             logger.info(f"Apply {description} result: {result.exit_code}")
 
             # Verify the change
@@ -155,13 +154,13 @@ async def test_docker_environment(repo_url: str):
         ]
 
         for change, description in changes_to_test:
-            await test_change(change, description)
+            test_change(change, description)
 
         logger.info("All change types tested")
 
         # Run tests
         logger.info("Testing run_tests")
-        result = await env.run_tests(["test_file.py"])
+        result = env.run_tests(["test_file.py"])
         logger.info(f"Run tests result: \n{result.output}")
 
         logger.info("All tests completed successfully!")
@@ -173,7 +172,7 @@ async def test_docker_environment(repo_url: str):
     finally:
         # Cleanup
         logger.info("Cleaning up environment")
-        await env.cleanup()
+        env.cleanup()
         logger.info("Cleanup complete")
 
 
@@ -187,4 +186,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(test_docker_environment(args.repo))
+    test_docker_environment(args.repo)

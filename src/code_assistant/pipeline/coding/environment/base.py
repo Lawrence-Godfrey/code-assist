@@ -35,7 +35,7 @@ class ExecutionEnvironment(ABC):
     """
 
     @abstractmethod
-    async def setup(self, repo_url: str, branch: str = "main") -> None:
+    def setup(self, repo_url: str, branch: str = "main") -> None:
         """
         Set up the execution environment.
 
@@ -49,7 +49,7 @@ class ExecutionEnvironment(ABC):
         pass
 
     @abstractmethod
-    async def cleanup(self) -> None:
+    def cleanup(self) -> None:
         """
         Clean up the execution environment.
 
@@ -85,7 +85,7 @@ class ExecutionEnvironment(ABC):
         pass
 
     @abstractmethod
-    async def apply_changes(self, changes: List[str]) -> ExecutionResult:
+    def apply_changes(self, changes: List[str]) -> ExecutionResult:
         """
         Apply code changes in the environment.
 
@@ -101,7 +101,7 @@ class ExecutionEnvironment(ABC):
         pass
 
     @abstractmethod
-    async def run_tests(self, test_files: List[str]) -> ExecutionResult:
+    def run_tests(self, test_files: List[str]) -> ExecutionResult:
         """
         Run tests in the environment.
 

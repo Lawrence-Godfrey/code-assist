@@ -54,7 +54,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         self._current_attempt = 0
         self._branch_name = None
 
-    async def execute(self, context: Dict) -> None:
+    def execute(self, context: Dict) -> None:
         """
         Execute the pipeline step.
 
@@ -77,27 +77,27 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         try:
             # Setup environment
             logger.info("Setting up execution environment")
-            await self._environment.setup(repo_url, self._branch_name)
+            self._environment.setup(repo_url, self._branch_name)
 
             # Initialize git config
-            await self._initialize_git_config()
+            self._initialize_git_config()
 
             # Generate and apply code changes
-            changes = await self._generate_changes(context)
-            apply_result = await self._apply_changes(changes)
+            changes = self._generate_changes(context)
+            apply_result = self._apply_changes(changes)
 
             if not apply_result.success:
                 raise RuntimeError(f"Failed to apply changes: {apply_result.error or apply_result.output}")
 
             # Create checkpoint for changes
-            checkpoint = await self._checkpoint_manager.create_checkpoint(
+            checkpoint = self._checkpoint_manager.create_checkpoint(
                 self._environment,
                 self._generate_commit_message(context, changes),
                 changes
             )
 
             # Run tests
-            test_result = await self._run_tests(checkpoint)
+            test_result = self._run_tests(checkpoint)
 
             # Update context with results
             context["coding_results"] = {
@@ -109,21 +109,21 @@ class CodingStep(PipelineStep, FeedbackEnabled):
             }
 
             # Push changes
-            await self._push_changes()
+            self._push_changes()
 
             # Request feedback on implementation
-            await self._request_implementation_feedback(context, checkpoint)
+            self._request_implementation_feedback(context, checkpoint)
 
         except Exception as e:
             # Handle the error
             logger.error(f"Execution step failed: {str(e)}")
-            await self._handle_execution_error(e, context)
+            self._handle_execution_error(e, context)
             raise
 
         # Continue to next step if successful
         return self.execute_next(context)
 
-    async def _generate_changes(self, context: Dict) -> List[CodeChange]:
+    def _generate_changes(self, context: Dict) -> List[CodeChange]:
         """
         Generate code changes based on requirements.
 
@@ -195,7 +195,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
 
         return changes
 
-    async def _apply_changes(self, changes: List[CodeChange]) -> ExecutionResult:
+    def _apply_changes(self, changes: List[CodeChange]) -> ExecutionResult:
         """
         Apply code changes to the environment.
 
@@ -208,11 +208,11 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         logger.info(f"Applying {len(changes)} code changes")
 
         # Stage files for commit
-        result = await self._environment.apply_changes(changes)
+        result = self._environment.apply_changes(changes)
 
         if result.success:
             # Stage all changes
-            stage_result = await self._environment.execute_command("git add .")
+            stage_result = self._environment.execute_command("git add .")
             if stage_result.exit_code != 0:
                 return ExecutionResult(
                     exit_code=stage_result.exit_code,
@@ -222,7 +222,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
 
         return result
 
-    async def _run_tests(self, checkpoint: Checkpoint) -> ExecutionResult:
+    def _run_tests(self, checkpoint: Checkpoint) -> ExecutionResult:
         """
         Run tests for the current implementation.
 
@@ -235,7 +235,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         logger.info("Running tests")
 
         # Find all test files
-        find_tests_result = await self._environment.execute_command(
+        find_tests_result = self._environment.execute_command(
             "find . -name 'test_*.py' -type f -not -path '*/\\.*'"
         )
 
@@ -248,7 +248,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
             test_files = [f.strip("./") for f in test_files if f.strip()]
 
         # Run tests and validate checkpoint
-        await self._checkpoint_manager.validate_checkpoint(
+        self._checkpoint_manager.validate_checkpoint(
             checkpoint.id,
             self._environment,
             test_files
@@ -264,7 +264,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
             error=updated_checkpoint.test_results.error
         )
 
-    async def _push_changes(self) -> ExecutionResult:
+    def _push_changes(self) -> ExecutionResult:
         """
         Push changes to the remote repository.
 
@@ -274,9 +274,9 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         logger.info(f"Pushing changes to branch: {self._branch_name}")
 
         # Push to remote
-        return await self._environment.execute_command(f"git push -u origin {self._branch_name}")
+        return self._environment.execute_command(f"git push -u origin {self._branch_name}")
 
-    async def _handle_execution_error(self, error: Exception, context: Dict) -> None:
+    def _handle_execution_error(self, error: Exception, context: Dict) -> None:
         """
         Handle errors that occur during execution.
 
@@ -298,7 +298,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
 
             # Roll back if we have a valid checkpoint
             if latest_valid_checkpoint:
-                await self._checkpoint_manager.rollback_to_checkpoint(
+                self._checkpoint_manager.rollback_to_checkpoint(
                     latest_valid_checkpoint.id,
                     self._environment
                 )
@@ -315,14 +315,14 @@ class CodingStep(PipelineStep, FeedbackEnabled):
 
             if response.lower().strip() in ("y", "yes"):
                 # Try again with potentially different changes
-                await self.execute(context)
+                self.execute(context)
             else:
                 # User doesn't want to retry, cleanup and continue
-                await self._cleanup()
+                self._cleanup()
         else:
             # Max attempts reached, cleanup and continue
             logger.warning(f"Max retry attempts ({self._max_retry_attempts}) reached, giving up")
-            await self._cleanup()
+            self._cleanup()
 
             # Update context with failure info
             context["coding_results"] = {
@@ -331,25 +331,25 @@ class CodingStep(PipelineStep, FeedbackEnabled):
                 "attempts": self._current_attempt,
             }
 
-    async def _initialize_git_config(self) -> None:
+    def _initialize_git_config(self) -> None:
         """Initialize git configuration in the environment."""
         # Set up Git config for commits
-        await self._environment.execute_command(
+        self._environment.execute_command(
             "git config --local user.email 'code-assistant@example.com'"
         )
-        await self._environment.execute_command(
+        self._environment.execute_command(
             "git config --local user.name 'Code Assistant'"
         )
 
-    async def _cleanup(self) -> None:
+    def _cleanup(self) -> None:
         """Clean up resources after execution."""
         try:
             logger.info("Cleaning up execution environment")
-            await self._environment.cleanup()
+            self._environment.cleanup()
         except Exception as e:
             logger.error(f"Environment cleanup failed: {str(e)}")
 
-    async def _request_implementation_feedback(self, context: Dict, checkpoint: Checkpoint) -> None:
+    def _request_implementation_feedback(self, context: Dict, checkpoint: Checkpoint) -> None:
         """
         Request feedback on the implementation.
 
