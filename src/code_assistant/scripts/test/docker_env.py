@@ -18,10 +18,10 @@ from code_assistant.logging.logger import get_logger
 from code_assistant.pipeline.coding.environment.config import DockerConfig
 from code_assistant.pipeline.coding.environment.docker import DockerEnvironment
 from code_assistant.pipeline.coding.models import (
+    ChangeType,
+    CodeChange,
     FileModification,
     ModificationType,
-    CodeChange,
-    ChangeType,
 )
 
 logger = get_logger(__name__)
@@ -55,12 +55,12 @@ async def test_docker_environment(repo_url: str):
         logger.info("Creating initial test file")
         test_content = (
             "def test_function():\n"
-            "    message = \"Hello, Pipeline!\"\n"
-            "    assert message == \"Hello, Pipeline!\"\n"
+            '    message = "Hello, Pipeline!"\n'
+            '    assert message == "Hello, Pipeline!"\n'
             "\n"
             "def test_success():\n"
-            "    message = \"Hello, Pipeline!\"\n"
-            "    assert message == \"Hello, Pipeline!\"\n"
+            '    message = "Hello, Pipeline!"\n'
+            '    assert message == "Hello, Pipeline!"\n'
         )
 
         result = env.execute_command(f"echo '{test_content}' > test_file.py")

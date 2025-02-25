@@ -11,11 +11,13 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from code_assistant.logging.logger import get_logger
-from code_assistant.pipeline.coding.environment.base import \
-    ExecutionEnvironment, ExecutionResult
-from code_assistant.pipeline.coding.models import ChangeResult, CodeChange
-from code_assistant.pipeline.coding.checkpoints.models import Checkpoint, \
-    CheckpointStatus, TestResult
+from code_assistant.pipeline.coding.checkpoints.models import (
+    Checkpoint,
+    CheckpointStatus,
+    TestResult,
+)
+from code_assistant.pipeline.coding.environment.base import ExecutionEnvironment
+from code_assistant.pipeline.coding.models import CodeChange
 
 logger = get_logger(__name__)
 
@@ -34,10 +36,7 @@ class CheckpointManager:
         self._current_branch: Optional[str] = None
 
     async def create_checkpoint(
-            self,
-            environment: ExecutionEnvironment,
-            message: str,
-            changes: List[CodeChange]
+        self, environment: ExecutionEnvironment, message: str, changes: List[CodeChange]
     ) -> Checkpoint:
         """
         Create a new checkpoint for the current code state.
@@ -59,35 +58,38 @@ class CheckpointManager:
         checkpoint_id = str(uuid.uuid4())
 
         # Create the checkpoint in the environment (Git commit)
-        result = await environment.execute_command(f'git commit -m "{message}"')
+        result = environment.execute_command(f'git commit -m "{message}"')
         if result.exit_code != 0:
             logger.error(
-                f"Failed to create checkpoint: {result.error or result.output}")
+                f"Failed to create checkpoint: {result.error or result.output}"
+            )
             raise RuntimeError(
-                f"Failed to create checkpoint: {result.error or result.output}")
+                f"Failed to create checkpoint: {result.error or result.output}"
+            )
 
         # Get the commit hash from the result
         # Extract hash from output like: [main 1a2b3c4] Commit message
         commit_hash = ""
         if result.output:
             import re
-            match = re.search(r'\[.*\s([0-9a-f]+)\]', result.output)
+
+            match = re.search(r"\[.*\s([0-9a-f]+)]", result.output)
             if match:
                 commit_hash = match.group(1)
 
         if not commit_hash:
             # If we couldn't extract it, try getting it from git
-            rev_parse_result = await environment.execute_command(
-                'git rev-parse HEAD')
+            rev_parse_result = environment.execute_command("git rev-parse HEAD")
             if rev_parse_result.exit_code == 0:
                 commit_hash = rev_parse_result.output.strip()
             else:
                 commit_hash = "unknown"  # Fallback
 
         # Get current branch name
-        branch_result = await environment.execute_command(
-            'git rev-parse --abbrev-ref HEAD')
-        branch_name = branch_result.output.strip() if branch_result.exit_code == 0 else "unknown"
+        branch_result = environment.execute_command("git rev-parse --abbrev-ref HEAD")
+        branch_name = (
+            branch_result.output.strip() if branch_result.exit_code == 0 else "unknown"
+        )
         self._current_branch = branch_name
 
         # Create checkpoint object
@@ -104,15 +106,16 @@ class CheckpointManager:
         # Store the checkpoint
         self._checkpoints[checkpoint_id] = checkpoint
         logger.info(
-            f"Created checkpoint {checkpoint_id} with commit {commit_hash[:8]} on branch {branch_name}")
+            f"Created checkpoint {checkpoint_id} with commit {commit_hash[:8]} on branch {branch_name}"
+        )
 
         return checkpoint
 
     async def validate_checkpoint(
-            self,
-            checkpoint_id: str,
-            environment: ExecutionEnvironment,
-            test_files: Optional[List[str]] = None
+        self,
+        checkpoint_id: str,
+        environment: ExecutionEnvironment,
+        test_files: Optional[List[str]] = None,
     ) -> Checkpoint:
         """
         Run tests to validate a checkpoint.
@@ -140,7 +143,8 @@ class CheckpointManager:
 
         # Extract test statistics from output
         passed_count, failed_count, error_count = self._parse_test_statistics(
-            test_result.output)
+            test_result.output
+        )
 
         # Update the test results
         checkpoint.test_results = TestResult(
@@ -155,7 +159,8 @@ class CheckpointManager:
 
         # Update status based on test results
         checkpoint.status = (
-            CheckpointStatus.VALIDATED if test_result.exit_code == 0
+            CheckpointStatus.VALIDATED
+            if test_result.exit_code == 0
             else CheckpointStatus.FAILED
         )
 
@@ -167,9 +172,9 @@ class CheckpointManager:
         return checkpoint
 
     async def rollback_to_checkpoint(
-            self,
-            checkpoint_id: str,
-            environment: ExecutionEnvironment,
+        self,
+        checkpoint_id: str,
+        environment: ExecutionEnvironment,
     ) -> Checkpoint:
         """
         Roll back to a specific checkpoint.
@@ -190,14 +195,15 @@ class CheckpointManager:
             raise ValueError(f"Checkpoint {checkpoint_id} not found")
 
         logger.info(
-            f"Rolling back to checkpoint {checkpoint_id} ({checkpoint.commit_hash[:8]})")
+            f"Rolling back to checkpoint {checkpoint_id} ({checkpoint.commit_hash[:8]})"
+        )
 
         # Perform the rollback
-        result = await environment.execute_command(
-            f"git reset --hard {checkpoint.commit_hash}")
+        result = environment.execute_command(
+            f"git reset --hard {checkpoint.commit_hash}"
+        )
         if result.exit_code != 0:
-            raise RuntimeError(
-                f"Failed to roll back: {result.error or result.output}")
+            raise RuntimeError(f"Failed to roll back: {result.error or result.output}")
 
         # Update checkpoint status
         for cp in self._checkpoints.values():
@@ -217,18 +223,11 @@ class CheckpointManager:
         if not self._checkpoints:
             return None
 
-        return max(
-            self._checkpoints.values(),
-            key=lambda cp: cp.timestamp
-        )
+        return max(self._checkpoints.values(), key=lambda cp: cp.timestamp)
 
-    def get_checkpoints_by_status(self, status: CheckpointStatus) -> List[
-        Checkpoint]:
+    def get_checkpoints_by_status(self, status: CheckpointStatus) -> List[Checkpoint]:
         """Get all checkpoints with a specific status."""
-        return [
-            cp for cp in self._checkpoints.values()
-            if cp.status == status
-        ]
+        return [cp for cp in self._checkpoints.values() if cp.status == status]
 
     def _parse_test_statistics(self, test_output: str) -> tuple[int, int, int]:
         """
@@ -243,21 +242,21 @@ class CheckpointManager:
         # Look for pytest summary line like:
         # == 5 passed, 2 failed, 1 error in 0.71s ==
         import re
+
         summary_match = re.search(
-            r'=+ ([\d]+ passed)?,? ?([\d]+ failed)?,? ?([\d]+ error)?',
-            test_output
+            r"=+ (\d+ passed)?,? ?(\d+ failed)?,? ?(\d+ error)?", test_output
         )
 
         if summary_match:
             # Extract numbers from each group
             for group in summary_match.groups():
                 if group:
-                    num = int(re.search(r'(\d+)', group).group(1))
-                    if 'passed' in group:
+                    num = int(re.search(r"(\d+)", group).group(1))
+                    if "passed" in group:
                         passed_count = num
-                    elif 'failed' in group:
+                    elif "failed" in group:
                         failed_count = num
-                    elif 'error' in group:
+                    elif "error" in group:
                         error_count = num
 
         return passed_count, failed_count, error_count

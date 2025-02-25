@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 
 class CheckpointStatus(Enum):
     """Status of a checkpoint in the development process."""
+
     CREATED = "created"  # Initial checkpoint creation
     VALIDATED = "validated"  # Passed tests and validation
     REVIEWED = "reviewed"  # Reviewed and approved
@@ -24,6 +25,7 @@ class CheckpointStatus(Enum):
 @dataclass
 class TestResult:
     """Results of test execution for a checkpoint."""
+
     success: bool
     exit_code: int
     output: str
@@ -43,6 +45,7 @@ class Checkpoint:
     A checkpoint is a point-in-time snapshot of code changes with
     associated metadata, test results, and status information.
     """
+
     id: str
     commit_hash: str
     message: str
@@ -62,23 +65,27 @@ class Checkpoint:
             "branch_name": self.branch_name,
             "timestamp": self.timestamp.isoformat(),
             "status": self.status.value,
-            "test_results": {
-                "success": self.test_results.success,
-                "exit_code": self.test_results.exit_code,
-                "output": self.test_results.output,
-                "passed_count": self.test_results.passed_count,
-                "failed_count": self.test_results.failed_count,
-                "error_count": self.test_results.error_count,
-                "coverage": self.test_results.coverage,
-                "execution_time": self.test_results.execution_time,
-                "error": self.test_results.error,
-            } if self.test_results else None,
+            "test_results": (
+                {
+                    "success": self.test_results.success,
+                    "exit_code": self.test_results.exit_code,
+                    "output": self.test_results.output,
+                    "passed_count": self.test_results.passed_count,
+                    "failed_count": self.test_results.failed_count,
+                    "error_count": self.test_results.error_count,
+                    "coverage": self.test_results.coverage,
+                    "execution_time": self.test_results.execution_time,
+                    "error": self.test_results.error,
+                }
+                if self.test_results
+                else None
+            ),
             "changes": self.changes,
             "metadata": self.metadata,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'Checkpoint':
+    def from_dict(cls, data: dict) -> "Checkpoint":
         """Create a Checkpoint from a dictionary."""
         # Handle test results if present
         test_results = None
