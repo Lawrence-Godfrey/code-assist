@@ -58,8 +58,12 @@ class DockerEnvironment(ExecutionEnvironment):
             self.work_dir = Path(tempfile.mkdtemp())
 
             # Clone repository
-            logger.info(f"Cloning repository from {repo_url}")
-            self.repo = git.Repo.clone_from(repo_url, self.work_dir, branch=branch)
+            logger.info(f"Cloning repository from {repo_url} (main branch)")
+            self.repo = git.Repo.clone_from(repo_url, self.work_dir, branch="main")
+
+            if branch != "main":
+                logger.info(f"Checking out branch: {branch}")
+                self._checkout(branch)  # TODO: Maybe create a git utils file
 
             # Create and start container
             logger.info("Creating Docker container")
@@ -362,3 +366,28 @@ class DockerEnvironment(ExecutionEnvironment):
             raise TestExecutionError(
                 test_files=test_files, output="", error=str(e)
             ) from e
+
+    def _checkout(self, branch: str) -> None:
+        """
+        Checkout to the specified branch. Creates the branch if it doesn't exist.
+
+        Args:
+            branch: Branch to check out to
+
+        Raises:
+            EnvironmentError: If checkout fails
+        """
+        try:
+            # Check if branch exists
+            if branch in [ref.name for ref in self.repo.refs]:
+                # If branch exists, simply checkout
+                self.repo.git.checkout(branch)
+            else:
+                # If branch doesn't exist, create and checkout
+                logger.info(f"Branch {branch} doesn't exist, creating it")
+                self.repo.git.checkout('-b', branch)
+
+            logger.info(f"Successfully checked out branch: {branch}")
+        except Exception as e:
+            raise EnvironmentSetupError(
+                f"Failed to checkout branch {branch}: {str(e)}") from e
