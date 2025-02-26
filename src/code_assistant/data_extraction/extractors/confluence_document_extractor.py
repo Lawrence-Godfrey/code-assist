@@ -14,6 +14,7 @@ from typing import Optional
 from atlassian import Confluence
 from html2markdown import convert
 
+from code_assistant.data_extraction.extractors.exceptions import SourceExistsError
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.document import ConfluencePage
 from code_assistant.storage.stores.document import MongoDBDocumentStore
@@ -39,12 +40,6 @@ class Space:
             description=response.get("description", {}).get("plain", {}).get("value"),
             homepage_id=response.get("homepage", {}).get("id"),
         )
-
-
-class SpaceExistsError(Exception):
-    """Raised when a space already exists in the storage."""
-
-    pass
 
 
 class ConfluenceDocumentExtractor:
@@ -108,7 +103,7 @@ class ConfluenceDocumentExtractor:
             page = ConfluencePage(
                 title=content["title"],
                 content=markdown_content,
-                space_key=space_key,
+                source_id=space_key,
                 last_modified=datetime.fromisoformat(
                     content["version"]["when"].replace("Z", "+00:00")
                 ),
@@ -230,7 +225,7 @@ class ConfluenceDocumentExtractor:
 
         # Check if space already exists in storage
         if doc_store.namespace_exists() and not overwrite:
-            raise SpaceExistsError(
+            raise SourceExistsError(
                 f"Space {space_key} already exists. Use overwrite=True to replace."
             )
 

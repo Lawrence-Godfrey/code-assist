@@ -27,7 +27,7 @@ class Document(ABC):
 
     title: str
     content: str
-    space_key: str
+    source_id: str
     last_modified: datetime
     doc_type: str = field(init=False)  # Set by subclasses
     embeddings: Dict[str, EmbeddingUnit] = field(default_factory=dict)
@@ -41,7 +41,7 @@ class Document(ABC):
             "doc_type": self.doc_type,
             "title": self.title,
             "content": self.content,
-            "space_key": self.space_key,
+            "source_id": self.source_id,
             "last_modified": self.last_modified.isoformat(),
             "embeddings": {
                 model_name: embedding.to_dict()
@@ -54,8 +54,12 @@ class Document(ABC):
     def from_dict(cls, data: dict) -> "Document":
         """Create a Document from a dictionary."""
         doc_type = data.pop("doc_type")
-        if doc_type == "page":
+        if doc_type == "confluence_page":
             return ConfluencePage.from_dict(data)
+        elif doc_type == "notion_page":
+            return NotionPage.from_dict(data)
+        elif doc_type == "pdf_document":
+            return PDFDocument.from_dict(data)
         else:
             raise ValueError(f"Invalid document type: {doc_type}")
 
@@ -147,3 +151,45 @@ class NotionPage(Document):
         }
 
         return page
+
+
+@dataclass
+class PDFDocument(Document):
+    """Represents a PDF document with its specific metadata."""
+
+    doc_type = "pdf_document"
+    file_path: str = ""
+    page_count: int = 0
+    file_size: int = 0
+
+    def to_dict(self) -> dict:
+        """Convert the PDF document to a dictionary."""
+        result = super().to_dict()
+        result.update(
+            {
+                "file_path": self.file_path,
+                "page_count": self.page_count,
+                "file_size": self.file_size,
+            }
+        )
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PDFDocument":
+        """Create a PDFDocument from a dictionary."""
+        # Convert ISO format string back to datetime
+        data["last_modified"] = datetime.fromisoformat(data["last_modified"])
+
+        # Extract embeddings data
+        embeddings_data = data.pop("embeddings", {})
+
+        # Create the document instance
+        document = cls(**data)
+
+        # Restore embeddings
+        document.embeddings = {
+            model_name: EmbeddingUnit.from_dict(embedding_data)
+            for model_name, embedding_data in embeddings_data.items()
+        }
+
+        return document

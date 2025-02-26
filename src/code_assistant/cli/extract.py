@@ -10,6 +10,9 @@ from code_assistant.data_extraction.extractors.github_code_extractor import (
     CodebaseExistsError,
     GitHubCodeExtractor,
 )
+from code_assistant.data_extraction.extractors.local_pdf_document_extractor import (
+    PDFDocumentExtractor,
+)
 from code_assistant.data_extraction.extractors.notion_document_extractor import (
     NotionDocumentExtractor,
 )
@@ -157,3 +160,51 @@ class ExtractCommands:
             logger.error(str(e))
         except Exception as e:
             logger.error(f"Error extracting from Notion: {str(e)}")
+
+    def pdf(
+        self,
+        path: str,
+        space_key: str,
+        database_url: str = "mongodb://localhost:27017/",
+        limit: Optional[int] = None,
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Extract text from PDF files and store as documents.
+
+        Args:
+            path: Path to PDF file or directory containing PDFs
+            space_key: Key for the document space (e.g., 'project-docs')
+            database_url: MongoDB connection URL
+            limit: Maximum number of files to process
+            overwrite: Whether to overwrite existing space content
+        """
+        try:
+            # Initialize extractor
+            extractor = PDFDocumentExtractor()
+
+            # Setup document store
+            database_url = os.getenv("MONGODB_URL") or database_url
+            doc_store = MongoDBDocumentStore(
+                space_key=space_key, connection_string=database_url
+            )
+
+            # Run extraction (needs to be run in asyncio event loop)
+            asyncio.run(
+                extractor.extract_documents(
+                    path=path,
+                    doc_store=doc_store,
+                    space_key=space_key,
+                    limit=limit,
+                    overwrite=overwrite,
+                )
+            )
+
+        except SpaceExistsError:
+            logger.error(
+                f"Space {space_key} already exists in storage. Use --overwrite to replace."
+            )
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Error extracting from PDFs: {str(e)}")

@@ -13,17 +13,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from code_assistant.data_extraction.extractors.exceptions import SourceExistsError
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.document import NotionPage
 from code_assistant.storage.stores.document import MongoDBDocumentStore
 
 logger = get_logger(__name__)
-
-
-class SpaceExistsError(Exception):
-    """Raised when a space already exists in the storage."""
-
-    pass
 
 
 class NotionDocumentExtractor:
@@ -74,7 +69,7 @@ class NotionDocumentExtractor:
             )
 
     async def _process_content(
-        self, page_id: str, space_key: str
+        self, page_id: str, database_id: str
     ) -> Optional[NotionPage]:
         """Process a single Notion page into a NotionPage."""
         try:
@@ -89,7 +84,7 @@ class NotionDocumentExtractor:
             notion_page = NotionPage(
                 title=self._extract_title(page),
                 content=content,
-                space_key=space_key,
+                source_id=database_id,
                 last_modified=datetime.fromisoformat(
                     page["last_edited_time"].replace("Z", "+00:00")
                 ),
@@ -166,24 +161,21 @@ class NotionDocumentExtractor:
         Args:
             database_id: ID of the Notion database to extract from
             doc_store: Document store to save extracted documents
-            overwrite: Whether to overwrite existing space content
+            overwrite: Whether to overwrite existing source content
             limit: Optional limit on number of pages to process
 
         Raises:
-            SpaceExistsError: If space exists and overwrite is False
+            SourceExistsError: If source exists and overwrite is False
             ValueError: If database doesn't exist or can't be accessed
         """
-        # Use database_id as space_key for consistency
-        space_key = database_id
-
-        # Check if space already exists in storage
+        # Check if source already exists in storage
         if doc_store.namespace_exists() and not overwrite:
-            raise SpaceExistsError(
-                f"Space {space_key} already exists. Use overwrite=True to replace."
+            raise SourceExistsError(
+                f"Source {database_id} already exists. Use overwrite=True to replace."
             )
 
         if overwrite:
-            logger.info(f"Overwriting space {space_key}")
+            logger.info(f"Overwriting source {database_id}")
             doc_store.delete_namespace()
 
         # Validate database access first
@@ -208,7 +200,7 @@ class NotionDocumentExtractor:
                     if limit and pages_processed >= limit:
                         break
 
-                    if page := await self._process_content(page["id"], space_key):
+                    if page := await self._process_content(page["id"], database_id):
                         doc_store.save_item(page)
                         pages_processed += 1
 
