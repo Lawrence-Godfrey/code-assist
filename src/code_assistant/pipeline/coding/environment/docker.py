@@ -95,12 +95,11 @@ class DockerEnvironment(ExecutionEnvironment):
         self.execute_command("apt-get update && apt-get install -y git")
 
         # Mark the workspace as a safe directory
-        self.execute_command(
-            "git config --global --add safe.directory /workspace")
+        self.execute_command("git config --global --add safe.directory /workspace")
 
         # Install Python dependencies if requirements.txt exists
-        if (self.work_dir / "requirements.txt").exists():
-            self.execute_command("pip install -r requirements.txt")
+        # if (self.work_dir / "requirements.txt").exists():
+        #     self.execute_command("pip install -r requirements.txt")
 
     def execute_command(
         self,
@@ -389,9 +388,10 @@ class DockerEnvironment(ExecutionEnvironment):
             else:
                 # If branch doesn't exist, create and checkout
                 logger.info(f"Branch {branch} doesn't exist, creating it")
-                self.repo.git.checkout('-b', branch)
+                self.repo.git.checkout("-b", branch)
 
             logger.info(f"Successfully checked out branch: {branch}")
         except Exception as e:
             raise EnvironmentSetupError(
-                f"Failed to checkout branch {branch}: {str(e)}") from e
+                f"Failed to checkout branch {branch}: {str(e)}"
+            ) from e

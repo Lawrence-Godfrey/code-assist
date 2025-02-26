@@ -17,7 +17,7 @@ from code_assistant.pipeline.coding.models import (
     ChangeType,
     CodeChange,
     FileModification,
-    ModificationType
+    ModificationType,
 )
 
 logger = get_logger(__name__)
@@ -26,6 +26,7 @@ logger = get_logger(__name__)
 @dataclass
 class ErrorRecord:
     """Record of an error occurrence and resolution attempt."""
+
     error_message: str
     error_type: str
     timestamp: datetime = field(default_factory=datetime.now)
@@ -37,6 +38,7 @@ class ErrorRecord:
 @dataclass
 class SuggestedFix:
     """Suggested fix for an error."""
+
     file_path: str
     line_number: Optional[int]
     original_code: str
@@ -62,12 +64,12 @@ class ErrorAnalyzer:
         self._prompt_model = prompt_model
         self._error_history: List[ErrorRecord] = []
 
-    async def analyze_error(
-            self,
-            error: Union[str, Exception],
-            changes: List[CodeChange],
-            test_output: Optional[str] = None,
-            code_context: Optional[Dict] = None
+    def analyze_error(
+        self,
+        error: Union[str, Exception],
+        changes: List[CodeChange],
+        test_output: Optional[str] = None,
+        code_context: Optional[Dict] = None,
     ) -> Dict:
         """
         Analyze an error and suggest fixes.
@@ -88,8 +90,9 @@ class ErrorAnalyzer:
 
         # Check if we've seen this error before
         similar_errors = self._find_similar_errors(error_msg)
-        previous_resolutions = [e.resolution_attempt for e in similar_errors if
-                                e.resolved]
+        previous_resolutions = [
+            e.resolution_attempt for e in similar_errors if e.resolved
+        ]
 
         # Format code changes for analysis
         formatted_changes = self._format_code_changes(changes)
@@ -166,13 +169,11 @@ class ErrorAnalyzer:
                 "error_location": "Unknown",
                 "root_cause": "Could not determine root cause",
                 "suggested_fixes": [],
-                "additional_recommendations": ["Review code manually"]
+                "additional_recommendations": ["Review code manually"],
             }
 
-    async def generate_fixes(
-            self,
-            analysis: Dict,
-            changes: List[CodeChange]
+    def generate_fixes(
+        self, analysis: Dict, changes: List[CodeChange]
     ) -> List[CodeChange]:
         """
         Generate code changes to fix the identified error.
@@ -215,10 +216,8 @@ class ErrorAnalyzer:
                                 type=ChangeType.CREATE,
                                 file_path=file_path,
                                 content=self._replace_substring(
-                                    original_change.content,
-                                    original_code,
-                                    fixed_code
-                                )
+                                    original_change.content, original_code, fixed_code
+                                ),
                             )
                         )
                     else:
@@ -235,10 +234,10 @@ class ErrorAnalyzer:
                                             type=ModificationType.REPLACE,
                                             content=fixed_code,
                                             start_line=line_number,
-                                            end_line=line_number + original_code.count(
-                                                '\n')
+                                            end_line=line_number
+                                            + original_code.count("\n"),
                                         )
-                                    ]
+                                    ],
                                 )
                             )
                         else:
@@ -250,8 +249,8 @@ class ErrorAnalyzer:
                                     content=self._replace_substring(
                                         original_change.content,
                                         original_code,
-                                        fixed_code
-                                    )
+                                        fixed_code,
+                                    ),
                                 )
                             )
 
@@ -269,12 +268,10 @@ class ErrorAnalyzer:
                                 FileModification(
                                     type=mod.type,
                                     content=self._replace_substring(
-                                        mod.content,
-                                        original_code,
-                                        fixed_code
+                                        mod.content, original_code, fixed_code
                                     ),
                                     start_line=mod.start_line,
-                                    end_line=mod.end_line
+                                    end_line=mod.end_line,
                                 )
                             )
                             found_match = True
@@ -287,7 +284,7 @@ class ErrorAnalyzer:
                             CodeChange(
                                 type=ChangeType.MODIFY,
                                 file_path=file_path,
-                                modifications=new_mods
+                                modifications=new_mods,
                             )
                         )
                     else:
@@ -299,15 +296,14 @@ class ErrorAnalyzer:
                                     type=ModificationType.REPLACE,
                                     content=fixed_code,
                                     start_line=line_number,
-                                    end_line=line_number + original_code.count(
-                                        '\n')
+                                    end_line=line_number + original_code.count("\n"),
                                 )
                             ]
                             fix_changes.append(
                                 CodeChange(
                                     type=ChangeType.MODIFY,
                                     file_path=file_path,
-                                    modifications=all_mods
+                                    modifications=all_mods,
                                 )
                             )
             else:
@@ -317,7 +313,7 @@ class ErrorAnalyzer:
                         CodeChange(
                             type=ChangeType.CREATE,
                             file_path=file_path,
-                            content=fixed_code
+                            content=fixed_code,
                         )
                     )
 
@@ -325,9 +321,7 @@ class ErrorAnalyzer:
         return fix_changes
 
     def get_error_history(
-            self,
-            error_type: Optional[str] = None,
-            resolved_only: bool = False
+        self, error_type: Optional[str] = None, resolved_only: bool = False
     ) -> List[ErrorRecord]:
         """
         Get error history, optionally filtered.
@@ -365,16 +359,19 @@ class ErrorAnalyzer:
     def _find_similar_errors(self, error_message: str) -> List[ErrorRecord]:
         """Find similar errors in the history."""
         return [
-            record for record in self._error_history
+            record
+            for record in self._error_history
             if self._is_similar_error(record.error_message, error_message)
         ]
 
     def _is_similar_error(self, error1: str, error2: str) -> bool:
         """Check if two error messages are similar."""
         # Remove variable parts like line numbers, memory addresses, timestamps
-        pattern = r'(0x[0-9a-f]+|line \d+|\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|"\w+\.py")'
-        clean1 = re.sub(pattern, 'XXX', error1)
-        clean2 = re.sub(pattern, 'XXX', error2)
+        pattern = (
+            r'(0x[0-9a-f]+|line \d+|\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|"\w+\.py")'
+        )
+        clean1 = re.sub(pattern, "XXX", error1)
+        clean2 = re.sub(pattern, "XXX", error2)
 
         # Calculate similarity (simple approach)
         return clean1 == clean2 or clean1 in clean2 or clean2 in clean1
@@ -387,8 +384,8 @@ class ErrorAnalyzer:
                 error_type=analysis.get("error_type", "Unknown error"),
                 context={
                     "error_location": analysis.get("error_location"),
-                    "root_cause": analysis.get("root_cause")
-                }
+                    "root_cause": analysis.get("root_cause"),
+                },
             )
         )
 
@@ -411,7 +408,8 @@ class ErrorAnalyzer:
                     result.append(f"Modification {i + 1}:")
                     result.append(f"Type: {mod.type.value}")
                     result.append(
-                        f"Lines: {mod.start_line or 'N/A'} to {mod.end_line or 'N/A'}")
+                        f"Lines: {mod.start_line or 'N/A'} to {mod.end_line or 'N/A'}"
+                    )
                     result.append("Content:")
                     result.append("```python")
                     result.append(mod.content)
@@ -424,6 +422,7 @@ class ErrorAnalyzer:
     def _is_small_diff(self, original: str, modified: str) -> bool:
         """Check if the difference between two strings is small."""
         import difflib
+
         matcher = difflib.SequenceMatcher(None, original, modified)
         return matcher.ratio() > 0.9
 
@@ -433,8 +432,8 @@ class ErrorAnalyzer:
             return text.replace(old, new)
 
         # Try with normalized whitespace
-        old_normalized = ' '.join(old.split())
-        text_normalized = ' '.join(text.split())
+        old_normalized = " ".join(old.split())
+        text_normalized = " ".join(text.split())
 
         if old_normalized in text_normalized:
             # Find position in normalized text
@@ -442,8 +441,9 @@ class ErrorAnalyzer:
             end = start + len(old_normalized)
 
             # Replace in normalized text
-            result_normalized = text_normalized[:start] + ' '.join(
-                new.split()) + text_normalized[end:]
+            result_normalized = (
+                text_normalized[:start] + " ".join(new.split()) + text_normalized[end:]
+            )
 
             # Convert back to original format (approximate)
             # This is a best-effort approach and may not preserve exact whitespace

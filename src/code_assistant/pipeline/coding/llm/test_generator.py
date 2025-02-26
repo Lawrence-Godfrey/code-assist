@@ -13,7 +13,7 @@ from code_assistant.models.prompt import PromptModel
 from code_assistant.pipeline.coding.models import (
     ChangeType,
     CodeChange,
-    FileModification
+    FileModification,
 )
 
 logger = get_logger(__name__)
@@ -36,12 +36,12 @@ class TestGenerator:
         """
         self._prompt_model = prompt_model
 
-    async def generate_tests(
-            self,
-            implementation_changes: List[CodeChange],
-            test_framework: str = "pytest",
-            coverage_target: float = 0.9,
-            context: Optional[Dict] = None
+    def generate_tests(
+        self,
+        implementation_changes: List[CodeChange],
+        test_framework: str = "pytest",
+        coverage_target: float = 0.9,
+        context: Optional[Dict] = None,
     ) -> List[CodeChange]:
         """
         Generate test cases for implementation changes.
@@ -61,7 +61,8 @@ class TestGenerator:
 
         # Process each implementation change to determine what needs tests
         implementation_files = self._extract_implementation_files(
-            implementation_changes)
+            implementation_changes
+        )
 
         for impl_file in implementation_files:
             # Skip files that shouldn't be tested
@@ -69,15 +70,13 @@ class TestGenerator:
                 continue
 
             # Generate test file path
-            test_file_path = self._get_test_file_path(impl_file["file_path"],
-                                                      test_framework)
+            test_file_path = self._get_test_file_path(
+                impl_file["file_path"], test_framework
+            )
 
             # Generate test content for this implementation
-            test_content = await self._generate_test_content(
-                impl_file,
-                test_framework,
-                coverage_target,
-                context
+            test_content = self._generate_test_content(
+                impl_file, test_framework, coverage_target, context
             )
 
             # Add to test changes
@@ -85,18 +84,18 @@ class TestGenerator:
                 CodeChange(
                     type=ChangeType.CREATE,
                     file_path=test_file_path,
-                    content=test_content
+                    content=test_content,
                 )
             )
 
         logger.info(f"Generated {len(test_changes)} test files")
         return test_changes
 
-    async def analyze_coverage(
-            self,
-            implementation_changes: List[CodeChange],
-            test_changes: List[CodeChange],
-            context: Optional[Dict] = None
+    def analyze_coverage(
+        self,
+        implementation_changes: List[CodeChange],
+        test_changes: List[CodeChange],
+        context: Optional[Dict] = None,
     ) -> Dict:
         """
         Analyze test coverage for the implementation.
@@ -113,9 +112,9 @@ class TestGenerator:
 
         # Extract implementation and test details
         implementation_files = self._extract_implementation_files(
-            implementation_changes)
-        test_files = {change.file_path: change.content for change in
-                      test_changes}
+            implementation_changes
+        )
+        test_files = {change.file_path: change.content for change in test_changes}
 
         # System prompt for coverage analysis
         system_prompt = """
@@ -173,7 +172,8 @@ class TestGenerator:
             analysis = json.loads(response)
 
             logger.info(
-                f"Coverage analysis complete: {analysis['overall_coverage_estimate']:.0%} estimated coverage")
+                f"Coverage analysis complete: {analysis['overall_coverage_estimate']:.0%} estimated coverage"
+            )
             return analysis
 
         except Exception as e:
@@ -182,14 +182,14 @@ class TestGenerator:
             return {
                 "overall_coverage_estimate": 0.0,
                 "files": [],
-                "recommendations": ["Could not analyze coverage"]
+                "recommendations": ["Could not analyze coverage"],
             }
 
-    async def generate_additional_tests(
-            self,
-            coverage_analysis: Dict,
-            implementation_changes: List[CodeChange],
-            existing_tests: List[CodeChange]
+    def generate_additional_tests(
+        self,
+        coverage_analysis: Dict,
+        implementation_changes: List[CodeChange],
+        existing_tests: List[CodeChange],
     ) -> List[CodeChange]:
         """
         Generate additional tests to improve coverage.
@@ -205,8 +205,7 @@ class TestGenerator:
         logger.info("Generating additional tests for coverage gaps")
 
         additional_tests = []
-        existing_test_map = {change.file_path: change for change in
-                             existing_tests}
+        existing_test_map = {change.file_path: change for change in existing_tests}
 
         # For each file with coverage gaps
         for file_info in coverage_analysis["files"]:
@@ -216,29 +215,30 @@ class TestGenerator:
 
             # Get implementation file details
             impl_file = next(
-                (f for f in
-                 self._extract_implementation_files(implementation_changes)
-                 if f["file_path"] == file_info["file_path"]),
-                None
+                (
+                    f
+                    for f in self._extract_implementation_files(implementation_changes)
+                    if f["file_path"] == file_info["file_path"]
+                ),
+                None,
             )
 
             if not impl_file:
                 continue
 
             # Find corresponding test file
-            test_file_path = self._get_test_file_path(file_info["file_path"],
-                                                      "pytest")
+            test_file_path = self._get_test_file_path(file_info["file_path"], "pytest")
 
             # Check if we have this test file already
             if test_file_path in existing_test_map:
                 existing_test = existing_test_map[test_file_path]
 
                 # Generate additional tests focusing on gaps
-                additional_content = await self._generate_gap_tests(
+                additional_content = self._generate_gap_tests(
                     impl_file,
                     file_info["uncovered_elements"],
                     file_info["coverage_gaps"],
-                    existing_test.content
+                    existing_test.content,
                 )
 
                 # Create a modified version of the existing test
@@ -251,75 +251,77 @@ class TestGenerator:
                                 type=FileModification.REPLACE,
                                 content=additional_content,
                                 start_line=1,
-                                end_line=999999
+                                end_line=999999,
                                 # Effectively replace the whole file
                             )
-                        ]
+                        ],
                     )
                 )
             else:
                 # Generate a new test file
-                test_content = await self._generate_test_content(
+                test_content = self._generate_test_content(
                     impl_file,
                     "pytest",
                     0.95,  # Higher coverage target
-                    {"focus_on": file_info["uncovered_elements"]}
+                    {"focus_on": file_info["uncovered_elements"]},
                 )
 
                 additional_tests.append(
                     CodeChange(
                         type=ChangeType.CREATE,
                         file_path=test_file_path,
-                        content=test_content
+                        content=test_content,
                     )
                 )
 
-        logger.info(
-            f"Generated {len(additional_tests)} additional test files/updates")
+        logger.info(f"Generated {len(additional_tests)} additional test files/updates")
         return additional_tests
 
-    def _extract_implementation_files(self, changes: List[CodeChange]) -> List[
-        Dict]:
+    def _extract_implementation_files(self, changes: List[CodeChange]) -> List[Dict]:
         """Extract implementation files from code changes."""
         implementation_files = []
 
         for change in changes:
             # Skip test files and non-Python files
-            if (change.file_path.startswith("test_") or
-                    not change.file_path.endswith(".py")):
+            if change.file_path.startswith("test_") or not change.file_path.endswith(
+                ".py"
+            ):
                 continue
 
             file_name = change.file_path.split("/")[-1]
 
             # Determine if this should be tested
-            should_test = (
-                    not file_name.startswith("__") and
-                    not file_name.startswith("test_")
+            should_test = not file_name.startswith("__") and not file_name.startswith(
+                "test_"
             )
 
             if change.type == ChangeType.CREATE:
-                implementation_files.append({
-                    "file_name": file_name,
-                    "file_path": change.file_path,
-                    "content": change.content,
-                    "should_test": should_test
-                })
+                implementation_files.append(
+                    {
+                        "file_name": file_name,
+                        "file_path": change.file_path,
+                        "content": change.content,
+                        "should_test": should_test,
+                    }
+                )
             elif change.type == ChangeType.MODIFY and change.modifications:
                 # For simplicity, we'll just use the first modification
-                implementation_files.append({
-                    "file_name": file_name,
-                    "file_path": change.file_path,
-                    "content": change.modifications[0].content,
-                    "should_test": should_test
-                })
+                implementation_files.append(
+                    {
+                        "file_name": file_name,
+                        "file_path": change.file_path,
+                        "content": change.modifications[0].content,
+                        "should_test": should_test,
+                    }
+                )
 
         return implementation_files
 
-    def _get_test_file_path(self, implementation_path: str,
-                            framework: str) -> str:
+    def _get_test_file_path(self, implementation_path: str, framework: str) -> str:
         """Get the corresponding test file path for an implementation file."""
         # Extract directory and filename
         import os
+
         directory, filename = os.path.split(implementation_path)
 
         # Create test filename
@@ -334,15 +336,14 @@ class TestGenerator:
             return os.path.join(test_dir, test_filename)
 
         # Default case
-        return os.path.join(directory,
-                            test_filename) if directory else test_filename
+        return os.path.join(directory, test_filename) if directory else test_filename
 
-    async def _generate_test_content(
-            self,
-            implementation_file: Dict,
-            test_framework: str,
-            coverage_target: float,
-            context: Optional[Dict] = None
+    def _generate_test_content(
+        self,
+        implementation_file: Dict,
+        test_framework: str,
+        coverage_target: float,
+        context: Optional[Dict] = None,
     ) -> str:
         """
         Generate test content for an implementation file.
@@ -367,7 +368,7 @@ class TestGenerator:
                 "import": "import unittest",
                 "style": "unittest.TestCase classes",
                 "assert": "unittest assertions (self.assertEqual(x, y))",
-            }
+            },
         }.get(test_framework.lower())
 
         # Create system prompt for test generation
@@ -404,7 +405,9 @@ class TestGenerator:
         if focus_elements:
             user_prompt += f"\nFocus particularly on testing these elements: {', '.join(focus_elements)}\n"
 
-        user_prompt += f"\nCreate a complete {test_framework} test file with thorough coverage."
+        user_prompt += (
+            f"\nCreate a complete {test_framework} test file with thorough coverage."
+        )
 
         # Generate test content
         response = self._prompt_model.generate_response(
@@ -424,11 +427,17 @@ class TestGenerator:
             test_content = f"import unittest\n{test_content}"
 
         # Import the module being tested
-        module_name = implementation_file['file_path'].replace('.py',
-                                                               '').replace('/',
-                                                                           '.').strip(
-            ".")
-        if module_name and f"import {module_name}" not in test_content and f"from {module_name}" not in test_content:
+        module_name = (
+            implementation_file["file_path"]
+            .replace(".py", "")
+            .replace("/", ".")
+            .strip(".")
+        )
+        if (
+            module_name
+            and f"import {module_name}" not in test_content
+            and f"from {module_name}" not in test_content
+        ):
             if "import " in test_content:
                 # Add after the last import
                 import_lines = []
@@ -446,12 +455,12 @@ class TestGenerator:
 
         return test_content
 
-    async def _generate_gap_tests(
-            self,
-            implementation_file: Dict,
-            uncovered_elements: List[str],
-            coverage_gaps: List[str],
-            existing_test_content: str
+    def _generate_gap_tests(
+        self,
+        implementation_file: Dict,
+        uncovered_elements: List[str],
+        coverage_gaps: List[str],
+        existing_test_content: str,
     ) -> str:
         """
         Generate additional tests focusing on coverage gaps.
@@ -520,7 +529,7 @@ class TestGenerator:
             if start_idx != -1:
                 # Find the last ``` and extract content between them
                 end_idx = content.rfind("```")
-                return content[start_idx + 1:end_idx].strip()
+                return content[start_idx + 1 : end_idx].strip()
 
         # Also handle cases where code blocks are in the middle
         if "```python" in content or "```" in content:

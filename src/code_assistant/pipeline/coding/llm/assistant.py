@@ -16,8 +16,9 @@ from code_assistant.pipeline.coding.models import (
     ChangeType,
     CodeChange,
     FileModification,
-    ModificationType
+    ModificationType,
 )
+from code_assistant.pipeline.requirements_gathering.schema import RequirementsSchema
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,7 @@ logger = get_logger(__name__)
 @dataclass
 class ImplementationPlan:
     """Structured plan for code implementation."""
+
     steps: List[str]
     file_changes: List[Dict]
     dependencies: List[str]
@@ -48,10 +50,8 @@ class Assistant:
         """
         self._prompt_model = prompt_model
 
-    async def create_implementation_plan(
-            self,
-            requirements: Dict,
-            context: Dict
+    def create_implementation_plan(
+        self, requirements: RequirementsSchema, context: Dict
     ) -> ImplementationPlan:
         """
         Create an implementation plan based on requirements.
@@ -68,6 +68,7 @@ class Assistant:
         # Format requirements for the prompt
         req_formatted = self._format_requirements(requirements)
 
+        # TODO: These prompts should be stored somewhere so that it doesn't ruin files like this
         # Prepare the prompt for plan generation
         system_prompt = """
         You are an expert software developer tasked with creating implementation plans.
@@ -117,11 +118,12 @@ class Assistant:
                 steps=plan_data["steps"],
                 file_changes=plan_data["file_changes"],
                 dependencies=plan_data["dependencies"],
-                test_approach=plan_data["test_approach"]
+                test_approach=plan_data["test_approach"],
             )
 
             logger.info(
-                f"Created implementation plan with {len(plan.steps)} steps and {len(plan.file_changes)} file changes")
+                f"Created implementation plan with {len(plan.steps)} steps and {len(plan.file_changes)} file changes"
+            )
             return plan
 
         except Exception as e:
@@ -130,16 +132,18 @@ class Assistant:
             return ImplementationPlan(
                 steps=["Implement basic functionality"],
                 file_changes=[
-                    {"file_path": "implementation.py", "change_type": "create",
-                     "description": "Basic implementation"}],
+                    {
+                        "file_path": "implementation.py",
+                        "change_type": "create",
+                        "description": "Basic implementation",
+                    }
+                ],
                 dependencies=["Python standard library"],
-                test_approach=["Create unit tests"]
+                test_approach=["Create unit tests"],
             )
 
-    async def generate_code_changes(
-            self,
-            plan: ImplementationPlan,
-            context: Dict
+    def generate_code_changes(
+        self, plan: ImplementationPlan, context: Dict
     ) -> List[CodeChange]:
         """
         Generate concrete code changes based on the implementation plan.
@@ -161,12 +165,8 @@ class Assistant:
             change_type = file_change["change_type"]
 
             # Generate code for this file
-            file_content = await self._generate_file_content(
-                file_path,
-                change_type,
-                file_change["description"],
-                plan,
-                context
+            file_content = self._generate_file_content(
+                file_path, change_type, file_change["description"], plan, context
             )
 
             # Create appropriate code change object
@@ -175,7 +175,7 @@ class Assistant:
                     CodeChange(
                         type=ChangeType.CREATE,
                         file_path=file_path,
-                        content=file_content
+                        content=file_content,
                     )
                 )
             elif change_type == "modify":
@@ -191,27 +191,24 @@ class Assistant:
                                 type=ModificationType.REPLACE,
                                 content=file_content,
                                 start_line=1,
-                                end_line=1000  # This is a placeholder
+                                end_line=1000,  # This is a placeholder
                             )
-                        ]
+                        ],
                     )
                 )
             elif change_type == "delete":
                 code_changes.append(
-                    CodeChange(
-                        type=ChangeType.DELETE,
-                        file_path=file_path
-                    )
+                    CodeChange(type=ChangeType.DELETE, file_path=file_path)
                 )
 
         logger.info(f"Generated {len(code_changes)} code changes")
         return code_changes
 
-    async def generate_tests(
-            self,
-            implementation_changes: List[CodeChange],
-            plan: ImplementationPlan,
-            context: Dict
+    def generate_tests(
+        self,
+        implementation_changes: List[CodeChange],
+        plan: ImplementationPlan,
+        context: Dict,
     ) -> List[CodeChange]:
         """
         Generate test cases for the implementation.
@@ -230,7 +227,8 @@ class Assistant:
 
         # Extract implementation details to help with test generation
         implementation_details = self._extract_implementation_details(
-            implementation_changes)
+            implementation_changes
+        )
 
         # System prompt for test generation
         system_prompt = """
@@ -287,19 +285,19 @@ class Assistant:
                 CodeChange(
                     type=ChangeType.CREATE,
                     file_path=test_file_path,
-                    content=test_content
+                    content=test_content,
                 )
             )
 
         logger.info(f"Generated {len(test_changes)} test files")
         return test_changes
 
-    async def analyze_error(
-            self,
-            error: Union[str, Exception],
-            changes: List[CodeChange],
-            test_output: Optional[str] = None,
-            context: Dict = None
+    def analyze_error(
+        self,
+        error: Union[str, Exception],
+        changes: List[CodeChange],
+        test_output: Optional[str] = None,
+        context: Dict = None,
     ) -> Dict:
         """
         Analyze an error and suggest fixes.
@@ -384,52 +382,56 @@ class Assistant:
                 "error_location": "Unknown",
                 "root_cause": "Could not determine root cause",
                 "suggested_fixes": [],
-                "additional_recommendations": ["Review code manually"]
+                "additional_recommendations": ["Review code manually"],
             }
 
-    def _format_requirements(self, requirements: Dict) -> str:
+    def _format_requirements(self, requirements: RequirementsSchema) -> str:
         """Format requirements for prompt input."""
+        # TODO: This entire thing can be done on the requirements schema
         if not requirements:
             return "No requirements provided."
 
         result = []
 
         # Handle task type
-        if task_type := requirements.get("task_type"):
+        if task_type := requirements.task_type:
             result.append(
-                f"Task Type: {task_type.value if hasattr(task_type, 'value') else task_type}")
+                f"Task Type: {task_type.value if hasattr(task_type, 'value') else task_type}"
+            )
 
         # Handle description
-        if description := requirements.get("description"):
+        if description := requirements.description:
             result.append(f"Description:\n{description}")
 
         # Handle definition of done (DoD)
-        if dod := requirements.get("dod"):
+        if dod := requirements.dod:
             dod_items = "\n".join([f"- {item}" for item in dod])
             result.append(f"Definition of Done:\n{dod_items}")
 
         # Handle risk and effort levels
-        if risk := requirements.get("risk"):
+        if risk := requirements.risk:
             result.append(
-                f"Risk Level: {risk.value if hasattr(risk, 'value') else risk}")
+                f"Risk Level: {risk.value if hasattr(risk, 'value') else risk}"
+            )
 
-        if effort := requirements.get("effort"):
+        if effort := requirements.effort:
             result.append(
-                f"Effort Level: {effort.value if hasattr(effort, 'value') else effort}")
+                f"Effort Level: {effort.value if hasattr(effort, 'value') else effort}"
+            )
 
         # Handle focus region
-        if focus_region := requirements.get("focus_region"):
+        if focus_region := requirements.focus_region:
             result.append(f"Focus Region: {focus_region}")
 
         return "\n\n".join(result)
 
-    async def _generate_file_content(
-            self,
-            file_path: str,
-            change_type: str,
-            description: str,
-            plan: ImplementationPlan,
-            context: Dict
+    def _generate_file_content(
+        self,
+        file_path: str,
+        change_type: str,
+        description: str,
+        plan: ImplementationPlan,
+        context: Dict,
     ) -> str:
         """Generate content for a file based on the implementation plan."""
         # Determine file type from path
@@ -492,6 +494,7 @@ class Assistant:
 
     def _clean_code_blocks(self, content: str) -> str:
         """Remove markdown code blocks if present."""
+        # TODO: Maybe put this on Prompt Model?
         # Check if content is wrapped in code blocks
         if content.startswith("```") and content.endswith("```"):
             # Find the first newline after the opening ```
@@ -499,7 +502,7 @@ class Assistant:
             if start_idx != -1:
                 # Find the last ``` and extract content between them
                 end_idx = content.rfind("```")
-                return content[start_idx + 1:end_idx].strip()
+                return content[start_idx + 1 : end_idx].strip()
 
         # Also handle cases where code blocks are in the middle
         if "```python" in content or "```" in content:
@@ -521,8 +524,7 @@ class Assistant:
         # If no code blocks found, return the original content
         return content
 
-    def _extract_implementation_details(self, changes: List[CodeChange]) -> \
-    List[Dict]:
+    def _extract_implementation_details(self, changes: List[CodeChange]) -> List[Dict]:
         """Extract implementation details from code changes."""
         details = []
 
@@ -533,17 +535,19 @@ class Assistant:
 
                 # Determine if this file should have tests
                 should_test = (
-                        file_name.endswith(".py") and
-                        not file_name.startswith("__") and
-                        not file_name.startswith("test_")
+                    file_name.endswith(".py")
+                    and not file_name.startswith("__")
+                    and not file_name.startswith("test_")
                 )
 
-                details.append({
-                    "file_name": file_name,
-                    "file_path": change.file_path,
-                    "content": change.content,
-                    "should_test": should_test
-                })
+                details.append(
+                    {
+                        "file_name": file_name,
+                        "file_path": change.file_path,
+                        "content": change.content,
+                        "should_test": should_test,
+                    }
+                )
 
             elif change.type == ChangeType.MODIFY and change.modifications:
                 # For simplicity, we'll just use the first modification
@@ -551,17 +555,19 @@ class Assistant:
 
                 # Consider if this should be tested
                 should_test = (
-                        file_name.endswith(".py") and
-                        not file_name.startswith("__") and
-                        not file_name.startswith("test_")
+                    file_name.endswith(".py")
+                    and not file_name.startswith("__")
+                    and not file_name.startswith("test_")
                 )
 
-                details.append({
-                    "file_name": file_name,
-                    "file_path": change.file_path,
-                    "content": change.modifications[0].content,
-                    "should_test": should_test
-                })
+                details.append(
+                    {
+                        "file_name": file_name,
+                        "file_path": change.file_path,
+                        "content": change.modifications[0].content,
+                        "should_test": should_test,
+                    }
+                )
 
         return details
 
@@ -584,7 +590,8 @@ class Assistant:
                     result.append(f"Modification {i + 1}:")
                     result.append(f"Type: {mod.type.value}")
                     result.append(
-                        f"Lines: {mod.start_line or 'N/A'} to {mod.end_line or 'N/A'}")
+                        f"Lines: {mod.start_line or 'N/A'} to {mod.end_line or 'N/A'}"
+                    )
                     result.append("Content:")
                     result.append("```python")
                     result.append(mod.content)
