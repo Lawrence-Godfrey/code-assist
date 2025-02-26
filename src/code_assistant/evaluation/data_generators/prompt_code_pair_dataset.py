@@ -7,7 +7,7 @@ from typing import Dict, Iterator, List, Optional
 from uuid import uuid4
 
 from code_assistant.storage.codebase import CodeUnit
-from code_assistant.storage.stores import CodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 
 @dataclass
@@ -198,7 +198,7 @@ class PromptCodePairDataset:
 
     @classmethod
     def from_json(
-        cls, json_path: Path, code_store: CodeStore
+        cls, json_path: Path, code_store: MongoDBCodeStore
     ) -> "PromptCodePairDataset":
         """
         Load a dataset from a JSON file.
@@ -212,7 +212,7 @@ class PromptCodePairDataset:
             data = json.load(f)
 
         for pair_data in data:
-            code_unit = code_store.get_unit_by_id(pair_data["code_unit_id"])
+            code_unit = code_store.get_item_by_id(pair_data["code_unit_id"])
             pair = PromptCodePair.from_dict(pair_data, code_unit)
             dataset.add_pair(pair)
 
@@ -300,7 +300,7 @@ class PromptCodePairDataset:
 
     @staticmethod
     def load_splits(
-        split_dir: Path, code_store: CodeStore
+        split_dir: Path, code_store: MongoDBCodeStore
     ) -> Dict[str, "PromptCodePairDataset"]:
         """
         Load previously created dataset splits.

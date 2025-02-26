@@ -10,7 +10,7 @@ from code_assistant.evaluation.evaluate_retrieval import (
     MultiModelCodeRetrievalEvaluator,
 )
 from code_assistant.models.factory import ModelFactory
-from code_assistant.storage.stores import MongoDBCodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 
 class EvaluateCommands:

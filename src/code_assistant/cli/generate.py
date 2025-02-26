@@ -6,7 +6,7 @@ from code_assistant.evaluation.data_generators.prompt_code_pair_generator import
     OpenAIConfig,
     OpenAIGenerator,
 )
-from code_assistant.storage.stores import MongoDBCodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 
 class GenerateCommands:

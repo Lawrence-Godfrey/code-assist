@@ -14,7 +14,7 @@ from git import Repo as GitRepo
 
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.codebase import Class, File, Function, Method
-from code_assistant.storage.stores import CodeStore
+from code_assistant.storage.stores.code import MongoDBCodeStore
 
 logger = get_logger(__name__)
 
@@ -277,7 +277,7 @@ class GitHubCodeExtractor:
     def process_repository(
         self,
         repo: Repo,
-        code_store: CodeStore,
+        code_store: MongoDBCodeStore,
         max_files: Optional[int] = None,
         overwrite: bool = False,
     ):
@@ -299,13 +299,13 @@ class GitHubCodeExtractor:
 
         if overwrite:
             logger.info(f"Overwriting codebase {repo.name}")
-            code_store.delete_codebase()
+            code_store.delete_namespace()
         else:
-            if code_store.codebase_exists():
+            if code_store.namespace_exists():
                 raise CodebaseExistsError(f"Codebase {repo.name} already exists.")
 
         # Extract code units from all files
         for file_path in python_files:
-            code_store.save_unit(self.extract_code_units(file_path, repo))
+            code_store.save_item(self.extract_code_units(file_path, repo))
 
         self.logger.info(f"Extracted {len(code_store)} code units")
