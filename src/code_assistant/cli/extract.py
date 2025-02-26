@@ -10,6 +10,9 @@ from code_assistant.data_extraction.extractors.github_code_extractor import (
     CodebaseExistsError,
     GitHubCodeExtractor,
 )
+from code_assistant.data_extraction.extractors.notion_document_extractor import (
+    NotionDocumentExtractor,
+)
 from code_assistant.logging.logger import get_logger
 from code_assistant.storage.stores.code import MongoDBCodeStore
 from code_assistant.storage.stores.document import MongoDBDocumentStore
@@ -102,3 +105,55 @@ class ExtractCommands:
             logger.error(str(e))
         except Exception as e:
             logger.error(f"Error extracting from Confluence: {str(e)}")
+
+    def notion(
+        self,
+        database_id: str,
+        database_url: str = "mongodb://localhost:27017/",
+        limit: Optional[int] = None,
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Extract documents from a Notion database.
+
+        The database ID can be found in the URL when viewing your database in Notion:
+        https://www.notion.so/workspace-name/83c75a51b3aa4d7a867f902df7e3f4e1?v=...
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        The ID is the 32-character string in the URL. Importantly, this only works
+        for databases and not pages! There is a difference between a database and
+        a page.
+
+        Args:
+            database_id: ID of the Notion database to extract from
+            database_url: MongoDB connection URL
+            limit: Maximum number of pages to process
+            overwrite: Whether to overwrite existing space content
+        """
+        try:
+            # Initialize extractor
+            extractor = NotionDocumentExtractor()
+
+            # Setup document store
+            database_url = os.getenv("MONGODB_URL") or database_url
+            doc_store = MongoDBDocumentStore(
+                space_key=database_id, connection_string=database_url
+            )
+
+            # Run extraction (needs to be run in asyncio event loop)
+            asyncio.run(
+                extractor.extract_documents(
+                    database_id=database_id,
+                    doc_store=doc_store,
+                    limit=limit,
+                    overwrite=overwrite,
+                )
+            )
+
+        except SpaceExistsError:
+            logger.error(
+                f"Space {database_id} already exists in storage. Use --overwrite to replace."
+            )
+        except ValueError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.error(f"Error extracting from Notion: {str(e)}")
