@@ -23,45 +23,61 @@ Requirements:
     - Pre-generated code embeddings in JSON format
 """
 
+from dataclasses import dataclass
 from typing import List, Optional
 
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.embedding import EmbeddingModel
 from code_assistant.models.prompt import PromptModel
+from code_assistant.storage.codebase import CodeUnit
+from code_assistant.storage.document import Document
 from code_assistant.storage.stores.code import MongoDBCodeStore
+from code_assistant.storage.stores.document import MongoDBDocumentStore
 from code_assistant.storage.types import SearchResult
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class RetrievedContext:
+    """Container for retrieved code and document results."""
+
+    code_units: List[SearchResult[CodeUnit]]
+    documents: List[SearchResult[Document]]
 
 
 class RAGEngine:
     def __init__(
         self,
         code_store: MongoDBCodeStore,
+        doc_store: MongoDBDocumentStore,
         embedding_model: EmbeddingModel,
         prompt_model: PromptModel,
-        top_k: Optional[int] = 5,
+        top_k_code: Optional[int] = 5,
+        top_k_docs: Optional[int] = 5,
         threshold: Optional[float] = None,
     ):
         """
         Initialises the RAG engine.
 
         Args:
-            code_store: CodeStore object for accessing code units.
+            code_store: Store for accessing code units.
+            doc_store: Store for accessing documentation.
             embedding_model: EmbeddingModel object used to generate the embeddings.
-             prompt_model: PromptModel object used for generating prompts.
-            top_k: Maximum number of similar code units to retrieve. Defaults to 5.
-            threshold: Minimum similarity score (0-1) required for retrieved code
-                units. Defaults to None.
+            prompt_model: PromptModel object used for generating prompts.
+            top_k_code: Maximum number of code units to retrieve
+            top_k_docs: Maximum number of documents to retrieve
+            threshold: Minimum similarity score (0-1) required for retrieved items
 
         Raises:
            FileNotFoundError: If the code_units_path file cannot be found.
            ValueError: If an unsupported prompt_model is specified.
         """
         self.code_store = code_store
-        self._top_k = top_k
+        self.doc_store = doc_store
+        self._top_k_code = top_k_code
+        self._top_k_docs = top_k_docs
         self._threshold = threshold
-
         self._embedding_model = embedding_model
         self._prompt_model = prompt_model
 
@@ -70,50 +86,56 @@ class RAGEngine:
         Processes a query through the complete RAG pipeline.
 
         This method executes the full retrieval-augmentation-generation sequence:
-        1. Retrieves similar code units based on the query
-        2. Augments the query with the retrieved code context
+        1. Retrieves similar code units and documentation based on the query
+        2. Augments the query with the retrieved context
         3. Generates a response using the specified LLM
 
         Args:
             query: The user's prompt to which RAG will be applied
 
         Returns:
-            response (str): The generated response that answers the query using
-                relevant code context.
+            The generated response that answers the query using relevant context.
         """
-        similar_code_units = self._retrieve(query)
-        prompt = self._augment(query, similar_code_units)
+        context = self._retrieve(query)
+        prompt = self._augment(query, context)
         response = self._generate(prompt)
 
         return response
 
-    def _retrieve(self, query: str) -> List[SearchResult]:
+    def _retrieve(self, query: str) -> RetrievedContext:
         """
-        Retrieves relevant code units by computing similarity with the query.
+        Retrieves relevant code units and documentation by computing similarity
+        with the query.
 
         Args:
-            query (str): The user's prompt which will be used to find similar
-                code units.
+            query: The user's prompt which will be used to find similar items.
 
         Returns:
-            similar_code_units (List[SearchResult]): The k most similar code
-                units to the query, in order from most similar to least similar.
+            RetrievedContext containing similar code units and documents
         """
         query_embedding = self._embedding_model.generate_embedding(query)
 
-        # Find code units similar to the query
-        similar_code_units = self.code_store.vector_search(
+        # Find similar code units
+        code_units = self.code_store.vector_search(
             query_embedding,
             self._embedding_model,
-            top_k=self._top_k,
+            top_k=self._top_k_code,
             threshold=self._threshold,
         )
 
-        return similar_code_units
+        # Find similar documents
+        documents = self.doc_store.vector_search(
+            query_embedding,
+            self._embedding_model,
+            top_k=self._top_k_docs,
+            threshold=self._threshold,
+        )
 
-    def _augment(self, query: str, similar_code_units: List[SearchResult]) -> str:
+        return RetrievedContext(code_units=code_units, documents=documents)
+
+    def _augment(self, query: str, context: RetrievedContext) -> str:
         """
-        Augments the original query with relevant code context.
+        Augments the original query with relevant code and documentation context.
 
         Format of the constructed prompt:
            Question: <original query>
@@ -130,40 +152,68 @@ class RAGEngine:
 
            [Additional code units...]
 
-           Based on the code context above, please provide a detailed answer...
+           Here is the relevant documentation:
+
+           [Document 1] Title: <title>
+           Content:
+           <document_content>
+           Similarity Score: <score>
+
+           [Additional documents...]
+
+           Based on the code and documentation context above, please provide a
+           detailed answer...
 
         Args:
-            query (str): The user's prompt which will be augmented with similar
-                code units for context
-            similar_code_units List[SearchResult]: The k most similar code units
-                to the query, in order from most similar to least similar.
+            query: The user's prompt to augment
+            context: Retrieved code units and documents
 
         Returns:
-            prompt (str): The augmented prompt.
+            The augmented prompt
         """
         prompt = f"Question: {query}\n\n"
-        prompt += "Here is the relevant code context from the codebase:\n\n"
 
-        for i, result in enumerate(similar_code_units, 1):
-            unit = result.item
-            prompt += f"[Code Unit {i}] "
-            prompt += f"Type: {unit.unit_type}  |  "
-            prompt += f"Full Name: {unit.fully_qualified_name()}\n"
+        # Add code context if any was found
+        if context.code_units:
+            prompt += "Here is the relevant code context:\n\n"
 
-            # Add source code
-            prompt += "```python\n"
-            prompt += f"{unit.source_code}\n"
-            prompt += "```\n"
+            for i, result in enumerate(context.code_units, 1):
+                unit = result.item
+                prompt += f"[Code Unit {i}] "
+                prompt += f"Type: {unit.unit_type}  |  "
+                prompt += f"Full Name: {unit.fully_qualified_name()}\n"
 
-            # Add docstring if it exists and isn't empty
-            if unit.docstring.strip():
-                prompt += f"Documentation: {unit.docstring}\n"
+                # Add source code
+                prompt += "```python\n"
+                prompt += f"{unit.source_code}\n"
+                prompt += "```\n"
 
-            prompt += f"Similarity Score: {result.similarity_score:.2f}\n\n"
+                # Add docstring if it exists and isn't empty
+                if unit.docstring and unit.docstring.strip():
+                    prompt += f"Documentation: {unit.docstring}\n"
 
-        prompt += "Based on the code context above, please "
-        prompt += "provide a detailed answer to the question. "
-        prompt += "Reference specific parts of the code where relevant.\n"
+                prompt += f"Similarity Score: {result.similarity_score:.2f}\n\n"
+
+        # Add documentation context if any was found
+        if context.documents:
+            prompt += "Here is the relevant documentation:\n\n"
+
+            for i, result in enumerate(context.documents, 1):
+                doc = result.item
+                prompt += f"[Document {i}] Title: {doc.title}\n"
+                prompt += "Content:\n"
+                # Truncate very long documents to maintain reasonable prompt length
+                content = (
+                    doc.content[:1000] + "..."
+                    if len(doc.content) > 1000
+                    else doc.content
+                )
+                prompt += f"{content}\n"
+                prompt += f"Similarity Score: {result.similarity_score:.2f}\n\n"
+
+        prompt += "Based on the code and documentation context above, please "
+        prompt += "provide a detailed answer to the question. Reference both "
+        prompt += "code examples and documentation where relevant.\n"
 
         logger.info("\nAugmented Prompt:\n")
         logger.info(prompt)
@@ -182,8 +232,11 @@ class RAGEngine:
             response_message (str): The generated response from the large LLM.
         """
         system_prompt = (
-            "You are a helpful assistant with expertise in Python programming."
+            "You are a helpful assistant with expertise in Python programming. "
+            "When providing explanations, reference both code examples and "
+            "documentation to give comprehensive answers."
         )
+
         response = self._prompt_model.generate_response(
             system_prompt=system_prompt,
             user_prompt=prompt,
