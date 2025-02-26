@@ -67,7 +67,7 @@ class CodingStep(PipelineStep, FeedbackEnabled):
         if "requirements_schema" not in context:
             raise ValueError("Requirements schema not found in context")
 
-        repo_url = os.getenv("REPO_URL")
+        repo_url = os.getenv("REPO_URL")  # TODO: Maybe a global settings var?
         if not repo_url:
             raise ValueError("REPO_URL environment variable is not set")
 
@@ -120,7 +120,8 @@ class CodingStep(PipelineStep, FeedbackEnabled):
             self._handle_execution_error(e, context)
             raise
 
-        # Continue to next step if successful
+        # Continue to next step if successful, first clean up
+        self._environment.cleanup()
         return self.execute_next(context)
 
     def _generate_changes(self, context: Dict) -> List[CodeChange]:

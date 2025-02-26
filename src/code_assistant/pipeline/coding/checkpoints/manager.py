@@ -243,20 +243,19 @@ class CheckpointManager:
         # == 5 passed, 2 failed, 1 error in 0.71s ==
         import re
 
-        summary_match = re.search(
-            r"=+ (\d+ passed)?,? ?(\d+ failed)?,? ?(\d+ error)?", test_output
-        )
+        # Look for passed tests
+        passed_match = re.search(r"(\d+) passed", test_output)
+        if passed_match:
+            passed_count = int(passed_match.group(1))
 
-        if summary_match:
-            # Extract numbers from each group
-            for group in summary_match.groups():
-                if group:
-                    num = int(re.search(r"(\d+)", group).group(1))
-                    if "passed" in group:
-                        passed_count = num
-                    elif "failed" in group:
-                        failed_count = num
-                    elif "error" in group:
-                        error_count = num
+        # Look for failed tests
+        failed_match = re.search(r"(\d+) failed", test_output)
+        if failed_match:
+            failed_count = int(failed_match.group(1))
+
+        # Look for errors
+        error_match = re.search(r"(\d+) error", test_output)
+        if error_match:
+            error_count = int(error_match.group(1))
 
         return passed_count, failed_count, error_count

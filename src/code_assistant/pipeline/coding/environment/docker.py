@@ -94,6 +94,10 @@ class DockerEnvironment(ExecutionEnvironment):
         # Install git
         self.execute_command("apt-get update && apt-get install -y git")
 
+        # Mark the workspace as a safe directory
+        self.execute_command(
+            "git config --global --add safe.directory /workspace")
+
         # Install Python dependencies if requirements.txt exists
         if (self.work_dir / "requirements.txt").exists():
             self.execute_command("pip install -r requirements.txt")
