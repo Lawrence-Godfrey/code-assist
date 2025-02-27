@@ -2,6 +2,8 @@
 
 A tool for code analysis and generation using large language models.
 
+![Code Assistant](https://i.imgur.com/JfH8Y3m.png)
+
 ## Installation
 
 ```bash

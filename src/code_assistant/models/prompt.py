@@ -1,9 +1,11 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, List
 
+from code_assistant.interfaces.api.models import MessageRole
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import Model, ModelFactory
+from code_assistant.models.types import Message
 
 logger = get_logger(__name__)
 
@@ -28,17 +30,15 @@ class PromptModel(Model, ABC):
     @abstractmethod
     def generate_response(
         self,
-        system_prompt: str,
-        user_prompt: str,
+        messages: List[Message],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> str:
         """
-        Generate a response from the model for the given prompts.
+        Generate a response from the model for the given messages.
 
         Args:
-            system_prompt: The system context/instruction for the model
-            user_prompt: The specific user query or instruction
+            messages: List of messages in the conversation, including system, user, and assistant messages
             temperature: Controls randomness in the response (0.0 to 1.0)
             max_tokens: Optional maximum length of the response
 
@@ -79,8 +79,7 @@ class OpenAIPromptModel(PromptModel):
 
     def generate_response(
         self,
-        system_prompt: str,
-        user_prompt: str,
+        messages: List[Message],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> str:
@@ -88,8 +87,7 @@ class OpenAIPromptModel(PromptModel):
         Generate a response using the OpenAI Chat Completions API.
 
         Args:
-            system_prompt: System context/instruction for the model
-            user_prompt: User query or instruction
+            messages: List of messages in the conversation
             temperature: Controls response randomness (0.0 to 1.0)
             max_tokens: Optional maximum response length
 
@@ -104,13 +102,16 @@ class OpenAIPromptModel(PromptModel):
             raise ValueError("Temperature must be between 0.0 and 1.0")
 
         try:
+            # Convert Messages to OpenAI message format
+            openai_messages = [
+                {"role": msg.role, "content": msg.content}
+                for msg in messages
+            ]
+
             # Prepare the API call parameters
             params = {
                 "model": self._model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                "messages": openai_messages,
                 "temperature": temperature,
             }
 
@@ -158,8 +159,7 @@ class AnthropicPromptModel(PromptModel):
 
     def generate_response(
         self,
-        system_prompt: str,
-        user_prompt: str,
+        messages: List[Message],
         temperature: float = 0.7,
         max_tokens: int = 1024,  # Max tokens must be set for Anthropic
     ) -> str:
@@ -167,8 +167,7 @@ class AnthropicPromptModel(PromptModel):
         Generate a response using the Anthropic API.
 
         Args:
-            system_prompt: System context/instruction for the model
-            user_prompt: User query or instruction
+            messages: List of messages in the conversation
             temperature: Controls response randomness (0.0 to 1.0)
             max_tokens: Maximum response length
 
@@ -186,16 +185,31 @@ class AnthropicPromptModel(PromptModel):
             raise ValueError("max_tokens must be greater than 0")
 
         try:
-            # Combine system and user prompts as per Anthropic's format
-            combined_prompt = f"{system_prompt}\n\nHuman: {user_prompt}\n\nAssistant:"
+            # Convert Messages to Anthropic message format
+            anthropic_messages = [
+                {"role": "assistant" if msg.role == MessageRole.ASSISTANT else "user", 
+                 "content": msg.content}
+                for msg in messages
+                if msg.role != MessageRole.SYSTEM  # System messages handled separately
+            ]
+
+            # Extract system message if present
+            system_message = next(
+                (msg for msg in messages if msg.role == MessageRole.SYSTEM),
+                None
+            )
 
             # Prepare the API call parameters
             params = {
                 "model": self._model_name,
-                "messages": [{"role": "user", "content": combined_prompt}],
+                "messages": anthropic_messages,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
             }
+
+            # Add system message if present
+            if system_message:
+                params["system"] = system_message.content
 
             # Make the API call
             response = self._client.messages.create(**params)

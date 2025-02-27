@@ -5,3 +5,4 @@
 diagrams
 *.db
 *.pyc
+.DS_Store
