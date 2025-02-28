@@ -60,6 +60,15 @@ class CRUDMixin:
                 session.commit()
                 session.refresh(instance)
         return instance
+    
+    @classmethod
+    def delete(cls, session, id):
+        instance = cls.get_by_id(session, id)
+        if instance:
+            session.delete(instance)
+            session.commit()
+            return True
+        return False
 
 
 

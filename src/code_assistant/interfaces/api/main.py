@@ -167,6 +167,27 @@ def list_chats():
             )
             for chat in chats
         ]
+        
+@app.delete("/api/chats/{chat_id}")
+def delete_chat(chat_id: int):
+    with get_db() as session:
+        # First delete all messages in all stages of this chat
+        stages = Stage.get_all(session, chat_id=chat_id)
+        for stage in stages:
+            messages = Message.get_all(session, stage_id=stage.id)
+            for message in messages:
+                Message.delete(session, message.id)
+                
+        # Next delete all stages
+        for stage in stages:
+            Stage.delete(session, stage.id)
+            
+        # Finally delete the chat
+        success = Chat.delete(session, chat_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Chat not found")
+            
+        return {"success": True}
 
 
 @app.post("/api/stages/{stage_id}/messages", response_model=MessageResponse)
