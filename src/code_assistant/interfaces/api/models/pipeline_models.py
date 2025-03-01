@@ -21,6 +21,7 @@ class ChatMessage(BaseModel):
 class PipelineRequest(BaseModel):
     prompt_model_name: Optional[str] = "gpt-4"
     message_history: List[ChatMessage]
+    previous_message_history: List[ChatMessage] = []
 
 
 class PipelineResponse(BaseModel):

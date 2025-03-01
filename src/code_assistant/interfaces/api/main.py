@@ -89,7 +89,7 @@ async def requirements_gatherer(request: PipelineRequest):
             content="""You are a requirements analysis assistant. 
             Your task is to analyze business requirements and request feedback if needed. 
             Once you have the necessary information, you will generate a summary of the requirements, 
-            and ask the user to approve the summary in order to proceed to the next stage.
+            and ask the user to approve the summary in order to proceed. This final response should contain the keyword '[APPROVAL_NEEDED]' explicitly, on its own line.
             The users who will be interacting with you are business users who are not technical and will not be able to provide you with the exact requirements.
             """,
             role=MessageRole.SYSTEM,
@@ -111,10 +111,8 @@ async def requirements_gatherer(request: PipelineRequest):
         role=MessageRole.ASSISTANT
     )
     
-    # Determine if approval is needed based on the context and complexity
-    # This will be determined by business logic in the backend rather than 
-    # checking for a specific string in the response
-    approval_needed = True  # For example, always require approval at the requirements gathering stage
+    # Determine if approval is needed
+    approval_needed = "[APPROVAL_NEEDED]" in response_content
     
     return PipelineResponse(
         status="success",
@@ -128,19 +126,34 @@ async def tech_spec_generator(request: PipelineRequest):
     """Execute the technical specification generator pipeline step."""
     prompt_model: PromptModel = ModelFactory.create(request.prompt_model_name)
     
-    message_history = [MessageModel(content=msg.content, role=msg.role) for msg in request.message_history]
-    
-    # Add system message for tech spec generation
-    system_message = MessageModel(
-        content="""You are a technical specification generator assistant.
-        Your task is to create a technical specification document based on the requirements gathered in the previous stage.
-        Work with the tech user to refine the technical specification document.
-        Once you have created a comprehensive technical specification, ask the user to approve it to proceed to the next stage.
-        """,
-        role=MessageRole.SYSTEM,
+    message_history = [PipelineChatMessage(content=msg.content, role=msg.role) for msg in request.message_history]
+    has_system_message = any(msg.role == MessageRole.SYSTEM for msg in message_history)
+
+    previous_message_history_formatted = "\n".join(
+        f"{msg.role.value}: {msg.content}" for msg in message_history
     )
+
+    if not has_system_message:
+        # Add system message for tech spec generation
+        system_message = PipelineChatMessage(
+            content=f"""You are a technical specification generator assistant.
+            Your task is to create a technical specification document based on the requirements gathered in the previous stage.
+            Work with the tech user to refine the technical specification document.
+            Once you have created a comprehensive technical specification, ask the user to approve it to proceed to the next stage.
+            This final response should contain the keyword '[APPROVAL_NEEDED]' explicitly, on its own line.
+
+            Here is the message history from the previous stage to use as context:
+            {previous_message_history_formatted}
+
+            Generate the technical specification document based on the requirements provided and the context.
+            """,
+            role=MessageRole.SYSTEM,
+        )
     
-    messages_for_model = [system_message, *message_history]
+        messages_for_model = [system_message, *message_history]
+    else:
+        # System message already exists, use chat history as is
+        messages_for_model = message_history
     
     # Generate response using the chat history
     response_content = prompt_model.generate_response(
@@ -149,15 +162,13 @@ async def tech_spec_generator(request: PipelineRequest):
     )
 
     # Create the assistant's response message
-    assistant_response_message = MessageCreate(
+    assistant_response_message = PipelineChatMessage(
         content=response_content,
         role=MessageRole.ASSISTANT
     )
     
-    # Determine if approval is needed based on the context and complexity
-    # This will be determined by business logic in the backend rather than 
-    # checking for a specific string in the response
-    approval_needed = True  # For example, always require approval at the tech spec stage
+    # Determine if approval is needed
+    approval_needed = "[APPROVAL_NEEDED]" in response_content
     
     return PipelineResponse(
         status="success",
