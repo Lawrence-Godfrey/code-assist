@@ -2,10 +2,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class StageStatus(Enum):
+class StageStatus(str, Enum):
     """Enum for Stage status values with display names."""
     NOT_STARTED = "not_started" 
     IN_PROGRESS = "in_progress"
+    WAITING_FOR_APPROVAL = "waiting_for_approval"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -15,6 +16,7 @@ class StageStatus(Enum):
         display_map = {
             cls.NOT_STARTED: "Not Started",
             cls.IN_PROGRESS: "In Progress",
+            cls.WAITING_FOR_APPROVAL: "Waiting for Approval",
             cls.COMPLETED: "Completed",
             cls.FAILED: "Failed"
         }

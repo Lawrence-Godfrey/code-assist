@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Optional, List
 
-from code_assistant.interfaces.api.models import MessageRole
+from code_assistant.interfaces.api.models.chat_models import MessageRole
 from code_assistant.logging.logger import get_logger
 from code_assistant.models.factory import Model, ModelFactory
 from code_assistant.models.types import Message
